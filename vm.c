@@ -344,9 +344,7 @@ static void vm_collect_usage_insn(int insn);
 static void vm_collect_usage_register(int reg, int isset);
 #endif
 
-#if RUBY_DEBUG
 static void vm_yjit_collect_usage_insn(int insn);
-#endif
 
 static VALUE vm_make_env_object(const rb_execution_context_t *ec, rb_control_frame_t *cfp);
 extern VALUE rb_vm_invoke_bmethod(rb_execution_context_t *ec, rb_proc_t *proc, VALUE self,
@@ -4055,13 +4053,11 @@ MAYBE_UNUSED(static void (*ruby_vm_collect_usage_func_register)(int reg, int iss
 
 #endif
 
-#if RUBY_DEBUG
 static void
 vm_yjit_collect_usage_insn(int insn)
 {
     rb_yjit_collect_vm_usage_insn(insn);
 }
-#endif
 
 #if VM_COLLECT_USAGE_DETAILS
 /* @param insn instruction number */

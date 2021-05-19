@@ -139,7 +139,9 @@ jit_save_sp(jitstate_t* jit, ctx_t* ctx)
 
 static bool jit_guard_known_klass(jitstate_t *jit, ctx_t* ctx, VALUE known_klass, insn_opnd_t insn_opnd, const int max_chain_depth, uint8_t *side_exit);
 
-#if RUBY_DEBUG
+
+
+
 
 // Increment a profiling counter with counter_name
 #define GEN_COUNTER_INC(cb, counter_name) _gen_counter_inc(cb, &(yjit_runtime_counters . counter_name))
@@ -165,34 +167,13 @@ _counted_side_exit(uint8_t *existing_side_exit, int64_t *counter)
     return start;
 }
 
-// Add a comment at the current position in the code block
-static void
-_add_comment(codeblock_t* cb, const char* comment_str)
-{
-    // Avoid adding duplicate comment strings (can happen due to deferred codegen)
-    size_t num_comments = rb_darray_size(yjit_code_comments);
-    if (num_comments > 0) {
-        struct yjit_comment last_comment = rb_darray_get(yjit_code_comments, num_comments - 1);
-        if (last_comment.offset == cb->write_pos && strcmp(last_comment.comment, comment_str) == 0) {
-            return;
-        }
-    }
-
-    struct yjit_comment new_comment = (struct yjit_comment){ cb->write_pos, comment_str };
-    rb_darray_append(&yjit_code_comments, new_comment);
-}
-
-// Comments for generated machine code
-#define ADD_COMMENT(cb, comment) _add_comment((cb), (comment))
-yjit_comment_array_t yjit_code_comments;
-
-#else
-
-#define GEN_COUNTER_INC(cb, counter_name) ((void)0)
-#define COUNTED_EXIT(side_exit, counter_name) side_exit
 #define ADD_COMMENT(cb, comment) ((void)0)
 
-#endif // if RUBY_DEBUG
+
+
+
+
+
 
 // Save YJIT registers prior to a C call
 static void
@@ -255,12 +236,10 @@ yjit_gen_exit(jitstate_t *jit, ctx_t *ctx, codeblock_t *cb)
     mov(cb, member_opnd(REG_CFP, rb_control_frame_t, pc), RAX);
 
     // Accumulate stats about interpreter exits
-#if RUBY_DEBUG
     if (rb_yjit_opts.gen_stats) {
         mov(cb, RDI, const_ptr_opnd(exit_pc));
         call_ptr(cb, RSI, (void *)&rb_yjit_count_side_exit_op);
     }
-#endif
 
     cb_write_post_call_bytes(cb);
 

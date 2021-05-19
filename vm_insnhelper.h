@@ -30,7 +30,7 @@ RUBY_SYMBOL_EXPORT_END
 #define COLLECT_USAGE_OPERAND(insn, n, op)	/* none */
 #define COLLECT_USAGE_REGISTER(reg, s)		/* none */
 #else
-#define COLLECT_USAGE_INSN(insn)		/* none */
+#define COLLECT_USAGE_INSN(insn)           vm_yjit_collect_usage_insn(insn)
 #define COLLECT_USAGE_OPERAND(insn, n, op)	/* none */
 #define COLLECT_USAGE_REGISTER(reg, s)		/* none */
 #endif

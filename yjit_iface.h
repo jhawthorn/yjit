@@ -11,7 +11,7 @@
 #include "vm_core.h"
 #include "yjit_core.h"
 
-#if RUBY_DEBUG
+//#if RUBY_DEBUG
 
 #define YJIT_DECLARE_COUNTERS(...) struct rb_yjit_runtime_counters { \
     int64_t __VA_ARGS__; \
@@ -86,7 +86,7 @@ typedef rb_darray(struct yjit_comment) yjit_comment_array_t;
 
 extern yjit_comment_array_t yjit_code_comments;
 
-#endif // if RUBY_DEBUG
+//#endif // if RUBY_DEBUG
 
 RUBY_EXTERN struct rb_yjit_options rb_yjit_opts;
 RUBY_EXTERN int64_t rb_compiled_iseq_count;

@@ -25,13 +25,10 @@ static VALUE cYjitDisasmInsn;
 static VALUE mYjit;
 static VALUE cYjitBlock;
 
-#if RUBY_DEBUG
 static int64_t vm_insns_count = 0;
 static int64_t exit_op_count[VM_INSTRUCTION_SIZE] = { 0 };
 int64_t rb_compiled_iseq_count = 0;
 struct rb_yjit_runtime_counters yjit_runtime_counters = { 0 };
-static VALUE cYjitCodeComment;
-#endif
 
 // Machine code blocks (executable memory)
 extern codeblock_t *cb;
@@ -724,7 +721,6 @@ comments_for(rb_execution_context_t *ec, VALUE self, VALUE start_address, VALUE 
 static VALUE
 get_stat_counters(rb_execution_context_t *ec, VALUE self)
 {
-#if RUBY_DEBUG
     if (!rb_yjit_opts.gen_stats) return Qnil;
 
     VALUE hash = rb_hash_new();
@@ -762,27 +758,21 @@ get_stat_counters(rb_execution_context_t *ec, VALUE self)
     }
     RB_VM_LOCK_LEAVE();
     return hash;
-#else
-    return Qnil;
-#endif // if RUBY_DEBUG
 }
 
 // Primitive called in yjit.rb. Zero out all the counters.
 static VALUE
 reset_stats_bang(rb_execution_context_t *ec, VALUE self)
 {
-#if RUBY_DEBUG
     vm_insns_count = 0;
     rb_compiled_iseq_count = 0;
     memset(&exit_op_count, 0, sizeof(exit_op_count));
     memset(&yjit_runtime_counters, 0, sizeof(yjit_runtime_counters));
-#endif // if RUBY_DEBUG
     return Qnil;
 }
 
 #include "yjit.rbinc"
 
-#if RUBY_DEBUG
 // implementation for --yjit-stats
 
 void
@@ -931,7 +921,6 @@ print_yjit_stats(void)
     // Print the top-N most frequent exit ops
     print_insn_count_buffer(20, 4);
 }
-#endif // if RUBY_DEBUG
 
 void
 rb_yjit_iseq_mark(const struct rb_iseq_constant_body *body)
@@ -1085,7 +1074,7 @@ rb_yjit_init(struct rb_yjit_options *options)
 #endif
 #endif
 
-    if (RUBY_DEBUG && rb_yjit_opts.gen_stats) {
+    if (rb_yjit_opts.gen_stats) {
         // Setup at_exit callback for printing out counters
         rb_block_call(rb_mKernel, rb_intern("at_exit"), 0, NULL, at_exit_print_stats, Qfalse);
     }
