@@ -691,29 +691,6 @@ static VALUE
 comments_for(rb_execution_context_t *ec, VALUE self, VALUE start_address, VALUE end_address)
 {
     VALUE comment_array = rb_ary_new();
-#if RUBY_DEBUG
-    uint8_t *start = (void *)NUM2ULL(start_address);
-    uint8_t *end = (void *)NUM2ULL(end_address);
-
-    rb_darray_for(yjit_code_comments, i) {
-        struct yjit_comment comment = rb_darray_get(yjit_code_comments, i);
-        uint8_t *comment_pos = cb_get_ptr(cb, comment.offset);
-
-        if (comment_pos >= end) {
-            break;
-        }
-        if (comment_pos >= start) {
-            VALUE vals = rb_ary_new_from_args(
-                2,
-                LL2NUM((long long) comment_pos),
-                rb_str_new_cstr(comment.comment)
-            );
-            rb_ary_push(comment_array, rb_struct_alloc(cYjitCodeComment, vals));
-        }
-    }
-
-#endif // if RUBY_DEBUG
-
     return comment_array;
 }
 
