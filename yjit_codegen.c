@@ -2754,7 +2754,7 @@ void
 yjit_init_codegen(void)
 {
     // Initialize the code blocks
-    uint32_t mem_size = 128 * 1024 * 1024;
+    uint32_t mem_size = 512 * 1024 * 1024;
     uint8_t *mem_block = alloc_exec_mem(mem_size);
 
     cb = &block;
