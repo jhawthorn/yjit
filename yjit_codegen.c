@@ -2139,9 +2139,34 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         ADD_COMMENT(cb, "String#to_s (no-op)");
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_mod_eqq && argc == 1) {
-        VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
+        uint8_t *side_exit = yjit_side_exit(jit, ctx);
 
-        // TODO
+        insn_opnd_t obj_opnd = OPND_STACK(0);
+
+        VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
+        VALUE comptime_obj_klass = CLASS_OF(comptime_obj);
+
+        // Qtrue or Qfalse
+        VALUE ret = rb_mod_eqq(comptime_recv, comptime_obj);
+
+        x86opnd_t obj = ctx_stack_opnd(ctx, 0);
+        mov(cb, REG0, obj);
+        if (!jit_guard_known_klass(jit, ctx, comptime_obj_klass, obj_opnd, SEND_MAX_DEPTH, side_exit)) {
+            return YJIT_CANT_COMPILE;
+        }
+
+        ADD_COMMENT(cb, "guard known receiver");
+        x86opnd_t recv_opnd = ctx_stack_opnd(ctx, argc);
+        jit_mov_gc_ptr(jit, cb, REG1, comptime_recv);
+        cmp(cb, recv_opnd, REG1);
+        jne_ptr(cb, side_exit);
+
+        ADD_COMMENT(cb, "push result");
+        ctx_stack_pop(ctx, argc + 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, imm_opnd(ret));
+
+        return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_ary_empty_p && argc == 0) {
         uint8_t *side_exit = yjit_side_exit(jit, ctx);
 
