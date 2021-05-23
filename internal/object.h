@@ -17,6 +17,7 @@
 #endif
 
 /* object.c */
+VALUE rb_mod_eqq(VALUE mod, VALUE arg);
 VALUE rb_class_search_ancestor(VALUE klass, VALUE super);
 NORETURN(void rb_undefined_alloc(VALUE klass));
 double rb_num_to_dbl(VALUE val);

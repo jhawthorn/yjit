@@ -6014,7 +6014,7 @@ rb_str_to_f(VALUE str)
  *  If called on a subclass of String, converts the receiver to a String object.
  */
 
-static VALUE
+VALUE
 rb_str_to_s(VALUE str)
 {
     if (rb_obj_class(str) != rb_cString) {

@@ -2477,9 +2477,6 @@ rb_ary_insert(int argc, VALUE *argv, VALUE ary)
 }
 
 static VALUE
-rb_ary_length(VALUE ary);
-
-static VALUE
 ary_enum_length(VALUE ary, VALUE args, VALUE eobj)
 {
     return rb_ary_length(ary);
@@ -2650,7 +2647,7 @@ rb_ary_reverse_each(VALUE ary)
  *  Returns the count of elements in +self+.
  */
 
-static VALUE
+VALUE
 rb_ary_length(VALUE ary)
 {
     long len = RARRAY_LEN(ary);

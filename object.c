@@ -1781,7 +1781,7 @@ rb_mod_freeze(VALUE mod)
  *  to classify objects by class.
  */
 
-static VALUE
+VALUE
 rb_mod_eqq(VALUE mod, VALUE arg)
 {
     return rb_obj_is_kind_of(arg, mod);

@@ -2128,6 +2128,61 @@ jit_protected_callee_ancestry_guard(jitstate_t *jit, codeblock_t *cb, const rb_c
 }
 
 static codegen_status_t
+gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    const rb_method_cfunc_t *cfunc = UNALIGNED_MEMBER_PTR(cme->def, body.cfunc);
+
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    VALUE comptime_recv = jit_peek_at_stack(jit, ctx, argc);
+
+    if (cfunc->func == rb_str_to_s && argc == 0) {
+        // We'll have ensured the class is a string earlier
+        ADD_COMMENT(cb, "String#to_s (no-op)");
+        return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_mod_eqq && argc == 1) {
+        VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
+
+        // TODO
+    } else if (cfunc->func == rb_ary_empty_p && argc == 0) {
+        ADD_COMMENT(cb, "guard embedded Array#empty?");
+        x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
+        test(cb, flags_opnd, imm_opnd(ROBJECT_EMBED));
+        jz_ptr(cb, side_exit);
+
+        ADD_COMMENT(cb, "embedded array empty?");
+        mov(cb, REG1, imm_opnd(Qtrue));
+        test(cb, flags_opnd, imm_opnd(RARRAY_EMBED_LEN_MASK));
+        mov(cb, REG0, imm_opnd(Qfalse));
+        cmove(cb, REG0, REG1);
+
+        ctx_stack_pop(ctx, argc + 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, REG0);
+
+        return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_ary_length && argc == 0) {
+        ADD_COMMENT(cb, "guard embedded Array#length");
+        x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
+        test(cb, flags_opnd, imm_opnd(ROBJECT_EMBED));
+        jz_ptr(cb, side_exit);
+
+        ADD_COMMENT(cb, "embedded array length");
+        mov(cb, REG1, flags_opnd);
+        and(cb, REG1, imm_opnd(RARRAY_EMBED_LEN_MASK));
+        shr(cb, REG1, imm_opnd(RARRAY_EMBED_LEN_SHIFT));
+
+        ctx_stack_pop(ctx, argc + 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FIXNUM);
+        mov(cb, stack_ret, REG1);
+
+        return YJIT_KEEP_COMPILING;
+    }
+
+	return YJIT_CANT_COMPILE;
+}
+
+static codegen_status_t
 gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
     const rb_method_cfunc_t *cfunc = UNALIGNED_MEMBER_PTR(cme->def, body.cfunc);
@@ -2148,6 +2203,13 @@ gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
     if (argc + 1 > NUM_C_ARG_REGS) {
         GEN_COUNTER_INC(cb, send_cfunc_toomany_args);
         return YJIT_CANT_COMPILE;
+    }
+
+    // Instructions which have hardcoded definitions
+    static codegen_status_t specialized;
+    specialized = gen_send_cfunc_specialized(jit, ctx, ci, cme, block, argc);
+    if (specialized != YJIT_CANT_COMPILE) {
+	    return specialized;
     }
 
     // Callee method ID

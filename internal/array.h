@@ -31,6 +31,8 @@ size_t rb_ary_memsize(VALUE);
 VALUE rb_to_array_type(VALUE obj);
 VALUE rb_to_array(VALUE obj);
 void rb_ary_cancel_sharing(VALUE ary);
+VALUE rb_ary_empty_p(VALUE ary);
+VALUE rb_ary_length(VALUE ary);
 
 static inline VALUE rb_ary_entry_internal(VALUE ary, long offset);
 static inline bool ARY_PTR_USING_P(VALUE ary);
