@@ -2132,8 +2132,6 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
 {
     const rb_method_cfunc_t *cfunc = UNALIGNED_MEMBER_PTR(cme->def, body.cfunc);
 
-    uint8_t *side_exit = yjit_side_exit(jit, ctx);
-
     VALUE comptime_recv = jit_peek_at_stack(jit, ctx, argc);
 
     if (cfunc->func == rb_str_to_s && argc == 0) {
@@ -2145,14 +2143,16 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
 
         // TODO
     } else if (cfunc->func == rb_ary_empty_p && argc == 0) {
+        uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
         ADD_COMMENT(cb, "guard embedded Array#empty?");
         x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
         test(cb, flags_opnd, imm_opnd(ROBJECT_EMBED));
         jz_ptr(cb, side_exit);
 
         ADD_COMMENT(cb, "embedded array empty?");
-        mov(cb, REG1, imm_opnd(Qtrue));
         test(cb, flags_opnd, imm_opnd(RARRAY_EMBED_LEN_MASK));
+        mov(cb, REG1, imm_opnd(Qtrue));
         mov(cb, REG0, imm_opnd(Qfalse));
         cmove(cb, REG0, REG1);
 
@@ -2162,6 +2162,8 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
 
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_ary_length && argc == 0) {
+        uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
         ADD_COMMENT(cb, "guard embedded Array#length");
         x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
         test(cb, flags_opnd, imm_opnd(ROBJECT_EMBED));
@@ -2170,7 +2172,8 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         ADD_COMMENT(cb, "embedded array length");
         mov(cb, REG1, flags_opnd);
         and(cb, REG1, imm_opnd(RARRAY_EMBED_LEN_MASK));
-        shr(cb, REG1, imm_opnd(RARRAY_EMBED_LEN_SHIFT));
+        shr(cb, REG1, imm_opnd(RARRAY_EMBED_LEN_SHIFT - 1));
+        or(cb, REG1, imm_opnd(1)); // (x << 1) | 1 for fixnum
 
         ctx_stack_pop(ctx, argc + 1);
         x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FIXNUM);
