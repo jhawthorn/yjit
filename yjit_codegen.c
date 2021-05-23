@@ -2205,9 +2205,20 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         mov(cb, stack_ret, REG1);
 
         return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == thread_s_current && argc == 0) {
+        ADD_COMMENT(cb, "get current thread");
+        x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
+        mov(cb, REG1, member_opnd(REG_EC, rb_execution_context_t, thread_ptr)); // ec->thread_ptr
+        mov(cb, REG1, member_opnd(REG1, rb_thread_t, self)); // thread->self
+
+        ctx_stack_pop(ctx, argc + 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_HEAP);
+        mov(cb, stack_ret, REG1);
+
+        return YJIT_KEEP_COMPILING;
     }
 
-	return YJIT_CANT_COMPILE;
+    return YJIT_CANT_COMPILE;
 }
 
 static codegen_status_t

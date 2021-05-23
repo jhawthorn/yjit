@@ -2902,7 +2902,7 @@ rb_thread_current(void)
  *     Thread.current   #=> #<Thread:0x401bdf4c run>
  */
 
-static VALUE
+VALUE
 thread_s_current(VALUE klass)
 {
     return rb_thread_current();
