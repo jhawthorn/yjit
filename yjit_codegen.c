@@ -2128,6 +2128,40 @@ jit_protected_callee_ancestry_guard(jitstate_t *jit, codeblock_t *cb, const rb_c
 }
 
 static codegen_status_t
+gen_obj_is_kind_of(jitstate_t *jit, ctx_t *ctx, uint8_t mod_stack_idx, uint8_t obj_stack_idx)
+{
+        uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+        VALUE comptime_mod = jit_peek_at_stack(jit, ctx, mod_stack_idx);
+
+        VALUE comptime_obj = jit_peek_at_stack(jit, ctx, obj_stack_idx);
+        VALUE comptime_obj_klass = CLASS_OF(comptime_obj);
+
+        VALUE ret = rb_obj_is_kind_of(comptime_obj, comptime_mod);
+
+        x86opnd_t obj = ctx_stack_opnd(ctx, obj_stack_idx);
+        insn_opnd_t obj_opnd = OPND_STACK(obj_stack_idx);
+        x86opnd_t mod = ctx_stack_opnd(ctx, mod_stack_idx);
+
+        mov(cb, REG0, obj);
+        if (!jit_guard_known_klass(jit, ctx, comptime_obj_klass, obj_opnd, SEND_MAX_DEPTH, side_exit)) {
+            return YJIT_CANT_COMPILE;
+        }
+
+        ADD_COMMENT(cb, "guard known module");
+        jit_mov_gc_ptr(jit, cb, REG1, comptime_mod);
+        cmp(cb, mod, REG1);
+        jne_ptr(cb, side_exit);
+
+        ADD_COMMENT(cb, "push result");
+        ctx_stack_pop(ctx, 2);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, imm_opnd(ret));
+
+        return YJIT_KEEP_COMPILING;
+}
+
+static codegen_status_t
 gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
     const rb_method_cfunc_t *cfunc = UNALIGNED_MEMBER_PTR(cme->def, body.cfunc);
@@ -2139,34 +2173,9 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         ADD_COMMENT(cb, "String#to_s (no-op)");
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_mod_eqq && argc == 1) {
-        uint8_t *side_exit = yjit_side_exit(jit, ctx);
-
-        insn_opnd_t obj_opnd = OPND_STACK(0);
-
-        VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
-        VALUE comptime_obj_klass = CLASS_OF(comptime_obj);
-
-        // Qtrue or Qfalse
-        VALUE ret = rb_mod_eqq(comptime_recv, comptime_obj);
-
-        x86opnd_t obj = ctx_stack_opnd(ctx, 0);
-        mov(cb, REG0, obj);
-        if (!jit_guard_known_klass(jit, ctx, comptime_obj_klass, obj_opnd, SEND_MAX_DEPTH, side_exit)) {
-            return YJIT_CANT_COMPILE;
-        }
-
-        ADD_COMMENT(cb, "guard known receiver");
-        x86opnd_t recv_opnd = ctx_stack_opnd(ctx, argc);
-        jit_mov_gc_ptr(jit, cb, REG1, comptime_recv);
-        cmp(cb, recv_opnd, REG1);
-        jne_ptr(cb, side_exit);
-
-        ADD_COMMENT(cb, "push result");
-        ctx_stack_pop(ctx, argc + 1);
-        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
-        mov(cb, stack_ret, imm_opnd(ret));
-
-        return YJIT_KEEP_COMPILING;
+        return gen_obj_is_kind_of(jit, ctx, 1, 0);
+    } else if (cfunc->func == rb_obj_is_kind_of && argc == 1) {
+        return gen_obj_is_kind_of(jit, ctx, 0, 1);
     } else if (cfunc->func == rb_ary_empty_p && argc == 0) {
         uint8_t *side_exit = yjit_side_exit(jit, ctx);
 
