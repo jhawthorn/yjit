@@ -2170,7 +2170,14 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
 
     VALUE comptime_recv = jit_peek_at_stack(jit, ctx, argc);
 
-    if (cfunc->func == rb_str_to_s && argc == 0) {
+    if (false) {
+    } else if (cfunc->func == rb_obj_dummy0 || cfunc->func == rb_obj_dummy1) {
+        ADD_COMMENT(cb, "dummy");
+        ctx_stack_pop(ctx, argc + 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, imm_opnd(Qnil));
+        return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_str_to_s && argc == 0) {
         // We'll have ensured the class is a string earlier
         ADD_COMMENT(cb, "String#to_s (no-op)");
         return YJIT_KEEP_COMPILING;

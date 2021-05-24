@@ -30,6 +30,9 @@ static inline void RBASIC_SET_CLASS_RAW(VALUE obj, VALUE klass);
 static inline void RBASIC_SET_CLASS(VALUE obj, VALUE klass);
 static inline struct st_table *ROBJECT_IV_INDEX_TBL_inline(VALUE obj);
 
+VALUE rb_obj_dummy0(VALUE);
+VALUE rb_obj_dummy1(VALUE, VALUE);
+
 RUBY_SYMBOL_EXPORT_BEGIN
 /* object.c (export) */
 int rb_opts_exception_p(VALUE opts, int default_value);

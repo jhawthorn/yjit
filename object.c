@@ -1183,13 +1183,13 @@ rb_obj_dummy(void)
     return Qnil;
 }
 
-static VALUE
+VALUE
 rb_obj_dummy0(VALUE _)
 {
     return rb_obj_dummy();
 }
 
-static VALUE
+VALUE
 rb_obj_dummy1(VALUE _x, VALUE _y)
 {
     return rb_obj_dummy();
