@@ -11136,7 +11136,7 @@ rb_sym_to_s(VALUE sym)
  * in this case.
  */
 
-static VALUE
+VALUE
 sym_to_sym(VALUE sym)
 {
     return sym;

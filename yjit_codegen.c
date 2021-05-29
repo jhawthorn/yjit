@@ -7,6 +7,8 @@
 #include "internal/compile.h"
 #include "internal/class.h"
 #include "internal/object.h"
+#include "internal/string.h"
+#include "internal/symbol.h"
 #include "insns_info.inc"
 #include "yjit.h"
 #include "yjit_iface.h"
@@ -2171,6 +2173,10 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
     if (cfunc->func == rb_str_to_s && argc == 0) {
         // We'll have ensured the class is a string earlier
         ADD_COMMENT(cb, "String#to_s (no-op)");
+        return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == sym_to_sym && argc == 0) {
+        // We'll have ensured the class is a string earlier
+        ADD_COMMENT(cb, "Symbol#to_sym (no-op)");
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_mod_eqq && argc == 1) {
         return gen_obj_is_kind_of(jit, ctx, 1, 0);
