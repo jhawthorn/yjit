@@ -2238,6 +2238,18 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         mov(cb, stack_ret, REG1);
 
         return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_obj_not && argc == 0) {
+        ctx_stack_pop(ctx, argc + 1);
+        if (RTEST(comptime_recv)) {
+            ADD_COMMENT(cb, "push false");
+            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+            mov(cb, stack_ret, imm_opnd(Qfalse));
+        } else {
+            ADD_COMMENT(cb, "push true");
+            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+            mov(cb, stack_ret, imm_opnd(Qtrue));
+        }
+        return YJIT_KEEP_COMPILING;
     }
 
     return YJIT_CANT_COMPILE;
