@@ -2073,6 +2073,46 @@ Recompile as contingency if possible, or take side exit a last resort.
 static bool
 jit_guard_known_klass(jitstate_t *jit, ctx_t* ctx, VALUE known_klass, insn_opnd_t insn_opnd, const int max_chain_depth, uint8_t *side_exit)
 {
+    ADD_COMMENT(cb, "jit_guard_known_klass");
+    val_type_t val_type = ctx_get_opnd_type(ctx, insn_opnd);
+
+    if (known_klass == rb_cNilClass) {
+        jit_print_loc(jit, "guard known class nil");
+
+        if (val_type.type == ETYPE_NIL) {
+            return true;
+        }
+        ADD_COMMENT(cb, "guard is nil");
+        cmp(cb, REG0, imm_opnd(Qnil));
+        jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+        return true;
+    } else if (known_klass == rb_cTrueClass) {
+        if (val_type.type == ETYPE_TRUE) {
+            return true;
+        }
+        ADD_COMMENT(cb, "guard is true");
+        cmp(cb, REG0, imm_opnd(Qtrue));
+        jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+        return true;
+    } else if (known_klass == rb_cFalseClass) {
+        if (val_type.type == ETYPE_FALSE) {
+            return true;
+        }
+        ADD_COMMENT(cb, "guard is false");
+        cmp(cb, REG0, imm_opnd(Qfalse));
+        jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+        return true;
+    } else if (known_klass == rb_cInteger) {
+        // Assume fixnum, don't support bignum
+        if (val_type.type == ETYPE_FIXNUM) {
+            return true;
+        }
+        ADD_COMMENT(cb, "guard is fixnum");
+        test(cb, REG0, imm_opnd(RUBY_FIXNUM_FLAG));
+        jit_chain_guard(JCC_JZ, jit, ctx, max_chain_depth, side_exit);
+        return true;
+    }
+
     // Can't guard for for these classes because some of they are sometimes immediate (special const).
     // Can remove this by adding appropriate dynamic checks.
     if (known_klass == rb_cInteger ||
@@ -2083,8 +2123,6 @@ jit_guard_known_klass(jitstate_t *jit, ctx_t* ctx, VALUE known_klass, insn_opnd_
         known_klass == rb_cFalseClass) {
         return false;
     }
-
-    val_type_t val_type = ctx_get_opnd_type(ctx, insn_opnd);
 
     // Check that the receiver is a heap object
     if (!val_type.is_heap)
