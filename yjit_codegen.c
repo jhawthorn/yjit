@@ -2215,6 +2215,18 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
         mov(cb, stack_ret, imm_opnd(Qnil));
         return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_true) {
+        ADD_COMMENT(cb, "push true");
+        ctx_stack_pop(ctx, 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+        mov(cb, stack_ret, imm_opnd(Qtrue));
+        return YJIT_KEEP_COMPILING;
+    } else if (cfunc->func == rb_false) {
+        ADD_COMMENT(cb, "push false");
+        ctx_stack_pop(ctx, 1);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+        mov(cb, stack_ret, imm_opnd(Qfalse));
+        return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_str_to_s && argc == 0) {
         // We'll have ensured the class is a string earlier
         ADD_COMMENT(cb, "String#to_s (no-op)");
@@ -3028,7 +3040,6 @@ gen_getblockparamproxy(jitstate_t *jit, ctx_t *ctx)
 
     return YJIT_KEEP_COMPILING;
 }
-
 
 static void
 yjit_reg_op(int opcode, codegen_fn gen_fn)
