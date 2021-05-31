@@ -1597,7 +1597,7 @@ false_and(VALUE obj, VALUE obj2)
  * Only the object <i>nil</i> responds <code>true</code> to <code>nil?</code>.
  */
 
-static VALUE
+VALUE
 rb_true(VALUE obj)
 {
     return Qtrue;

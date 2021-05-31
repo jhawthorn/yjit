@@ -32,6 +32,7 @@ static inline struct st_table *ROBJECT_IV_INDEX_TBL_inline(VALUE obj);
 
 VALUE rb_obj_dummy0(VALUE);
 VALUE rb_obj_dummy1(VALUE, VALUE);
+VALUE rb_true(VALUE);
 
 RUBY_SYMBOL_EXPORT_BEGIN
 /* object.c (export) */

@@ -1998,7 +1998,7 @@ rb_str_bytesize(VALUE str)
  *    "".empty? # => true
  */
 
-static VALUE
+VALUE
 rb_str_empty(VALUE str)
 {
     if (RSTRING_LEN(str) == 0)

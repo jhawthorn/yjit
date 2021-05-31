@@ -2077,27 +2077,16 @@ jit_guard_known_klass(jitstate_t *jit, ctx_t* ctx, VALUE known_klass, insn_opnd_
     val_type_t val_type = ctx_get_opnd_type(ctx, insn_opnd);
 
     if (known_klass == rb_cNilClass) {
-        jit_print_loc(jit, "guard known class nil");
-
-        if (val_type.type == ETYPE_NIL) {
-            return true;
-        }
         ADD_COMMENT(cb, "guard is nil");
         cmp(cb, REG0, imm_opnd(Qnil));
         jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
         return true;
     } else if (known_klass == rb_cTrueClass) {
-        if (val_type.type == ETYPE_TRUE) {
-            return true;
-        }
         ADD_COMMENT(cb, "guard is true");
         cmp(cb, REG0, imm_opnd(Qtrue));
         jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
         return true;
     } else if (known_klass == rb_cFalseClass) {
-        if (val_type.type == ETYPE_FALSE) {
-            return true;
-        }
         ADD_COMMENT(cb, "guard is false");
         cmp(cb, REG0, imm_opnd(Qfalse));
         jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
@@ -2218,13 +2207,13 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
     } else if (cfunc->func == rb_true) {
         ADD_COMMENT(cb, "push true");
         ctx_stack_pop(ctx, 1);
-        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
         mov(cb, stack_ret, imm_opnd(Qtrue));
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_false) {
         ADD_COMMENT(cb, "push false");
         ctx_stack_pop(ctx, 1);
-        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
         mov(cb, stack_ret, imm_opnd(Qfalse));
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == rb_str_to_s && argc == 0) {
@@ -2279,7 +2268,6 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         return YJIT_KEEP_COMPILING;
     } else if (cfunc->func == thread_s_current && argc == 0) {
         ADD_COMMENT(cb, "get current thread");
-        x86opnd_t flags_opnd = member_opnd(REG0, struct RBasic, flags);
         mov(cb, REG1, member_opnd(REG_EC, rb_execution_context_t, thread_ptr)); // ec->thread_ptr
         mov(cb, REG1, member_opnd(REG1, rb_thread_t, self)); // thread->self
 
@@ -2292,11 +2280,11 @@ gen_send_cfunc_specialized(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo
         ctx_stack_pop(ctx, argc + 1);
         if (RTEST(comptime_recv)) {
             ADD_COMMENT(cb, "push false");
-            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
             mov(cb, stack_ret, imm_opnd(Qfalse));
         } else {
             ADD_COMMENT(cb, "push true");
-            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+            x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
             mov(cb, stack_ret, imm_opnd(Qtrue));
         }
         return YJIT_KEEP_COMPILING;

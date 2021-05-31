@@ -2662,7 +2662,7 @@ rb_ary_length(VALUE ary)
  *  +false+ otherwise.
  */
 
-static VALUE
+VALUE
 rb_ary_empty_p(VALUE ary)
 {
     if (RARRAY_LEN(ary) == 0)
