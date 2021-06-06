@@ -58,4 +58,10 @@ class Array
   def sample(n = (ary = false), random: Random)
     Primitive.rb_ary_sample(random, n, ary)
   end
+
+  def length
+    Primitive.attr! 'inline'
+    Primitive.cexpr! 'LONG2NUM(RARRAY_LEN(self))'
+  end
+  alias size length
 end
