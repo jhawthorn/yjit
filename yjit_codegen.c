@@ -1928,6 +1928,20 @@ gen_opt_empty_p(jitstate_t* jit, ctx_t* ctx)
 }
 
 static codegen_status_t
+gen_opt_length(jitstate_t* jit, ctx_t* ctx)
+{
+    // Delegate to send, call the method on the recv
+    return gen_opt_send_without_block(jit, ctx);
+}
+
+static codegen_status_t
+gen_opt_size(jitstate_t* jit, ctx_t* ctx)
+{
+    // Delegate to send, call the method on the recv
+    return gen_opt_send_without_block(jit, ctx);
+}
+
+static codegen_status_t
 gen_opt_str_freeze(jitstate_t* jit, ctx_t* ctx)
 {
     if (!assume_bop_not_redefined(jit->block, STRING_REDEFINED_OP_FLAG, BOP_FREEZE)) {
@@ -3233,6 +3247,8 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(opt_ltlt), gen_opt_ltlt);
     yjit_reg_op(BIN(opt_nil_p), gen_opt_nil_p);
     yjit_reg_op(BIN(opt_empty_p), gen_opt_empty_p);
+    yjit_reg_op(BIN(opt_size), gen_opt_size);
+    yjit_reg_op(BIN(opt_length), gen_opt_length);
     yjit_reg_op(BIN(opt_str_freeze), gen_opt_str_freeze);
     yjit_reg_op(BIN(opt_str_uminus), gen_opt_str_uminus);
     yjit_reg_op(BIN(opt_not), gen_opt_not);
