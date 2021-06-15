@@ -32,6 +32,7 @@ void Init_newline(void);
 /* vm.c */
 void Init_BareVM(void);
 void Init_vm_objects(void);
+void Init_redefined_flags(void);
 
 /* vm_backtrace.c */
 void Init_vm_backtrace(void);

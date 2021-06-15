@@ -1556,6 +1556,7 @@ ruby_opt_init(ruby_cmdline_options_t *opt)
 
     Init_ext(); /* load statically linked extensions before rubygems */
     rb_call_builtin_inits();
+    Init_redefined_flags(); /* Save optimized methods */
     ruby_init_prelude();
 
     ruby_set_script_name(opt->script_name);

@@ -1837,6 +1837,7 @@ vm_redefinition_check_method_type(const rb_method_definition_t *def)
     switch (def->type) {
       case VM_METHOD_TYPE_CFUNC:
       case VM_METHOD_TYPE_OPTIMIZED:
+      case VM_METHOD_TYPE_ISEQ:
 	return TRUE;
       default:
 	return FALSE;
@@ -1846,6 +1847,10 @@ vm_redefinition_check_method_type(const rb_method_definition_t *def)
 static void
 rb_vm_check_redefinition_opt_method(const rb_method_entry_t *me, VALUE klass)
 {
+    if (!vm_opt_method_table) {
+        return;
+    }
+
     st_data_t bop;
     if (RB_TYPE_P(klass, T_ICLASS) && FL_TEST(klass, RICLASS_IS_ORIGIN) &&
             RB_TYPE_P(RBASIC_CLASS(klass), T_CLASS)) {
@@ -1894,8 +1899,8 @@ add_opt_method(VALUE klass, ID mid, VALUE bop)
     }
 }
 
-static void
-vm_init_redefined_flag(void)
+void
+Init_redefined_flags(void)
 {
     ID mid;
     VALUE bop;
@@ -3672,7 +3677,6 @@ Init_VM(void)
 	 */
 	rb_define_global_const("TOPLEVEL_BINDING", rb_binding_new());
     }
-    vm_init_redefined_flag();
 
     rb_block_param_proxy = rb_obj_alloc(rb_cObject);
     rb_add_method(rb_singleton_class(rb_block_param_proxy), idCall, VM_METHOD_TYPE_OPTIMIZED,
