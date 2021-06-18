@@ -2687,6 +2687,16 @@ jit_rb_obj_dummy(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+// Codegen for Kernel#itself, Symbol#to_sym and other identity methods
+static bool
+jit_rb_obj_itself(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "push self");
+    ctx_stack_pop(ctx, argc); // pop arguments if any
+    // Leave receiver in place
+    return true;
+}
+
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
 lookup_cfunc_codegen(const rb_method_definition_t *def)
@@ -3740,6 +3750,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_cSymbol, "===", jit_rb_obj_equal);
 
     yjit_reg_method(rb_cBasicObject, "initialize", jit_rb_obj_dummy);
+
+    yjit_reg_method(rb_mKernel, "itself", jit_rb_obj_itself);
 }
 
 void
