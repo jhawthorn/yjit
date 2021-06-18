@@ -2697,6 +2697,20 @@ jit_rb_obj_itself(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, con
     return true;
 }
 
+static bool
+jit_thread_s_current(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "Thread.current");
+    ctx_stack_pop(ctx, 1);
+
+    mov(cb, REG0, member_opnd(REG_EC, rb_execution_context_t, thread_ptr)); // ec->thread_ptr
+    mov(cb, REG0, member_opnd(REG0, rb_thread_t, self)); // thread->self
+
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_HEAP);
+    mov(cb, stack_ret, REG0);
+    return true;
+}
+
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
 lookup_cfunc_codegen(const rb_method_definition_t *def)
@@ -3752,6 +3766,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_cBasicObject, "initialize", jit_rb_obj_dummy);
 
     yjit_reg_method(rb_mKernel, "itself", jit_rb_obj_itself);
+
+    yjit_reg_method(rb_singleton_class(rb_cThread), "current", jit_thread_s_current);
 }
 
 void
