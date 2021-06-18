@@ -2674,11 +2674,14 @@ jit_rb_obj_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
 }
 
 // Codegen for rb_obj_dummy().
-// Essentially a nop. Pop all arguments and push nil
 static bool
 jit_rb_obj_dummy(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
+    ADD_COMMENT(cb, "push nil");
+    // pop all arguments and receiver
     ctx_stack_pop(ctx, argc + 1);
+
+    // push nil
     x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_NIL);
     mov(cb, stack_ret, imm_opnd(Qnil));
     return true;
