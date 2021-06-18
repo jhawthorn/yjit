@@ -2673,6 +2673,17 @@ jit_rb_obj_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+// Codegen for rb_obj_dummy().
+// Essentially a nop. Pop all arguments and push nil
+static bool
+jit_rb_obj_dummy(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ctx_stack_pop(ctx, argc + 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_NIL);
+    mov(cb, stack_ret, imm_opnd(Qnil));
+    return true;
+}
+
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
 lookup_cfunc_codegen(const rb_method_definition_t *def)
@@ -3724,6 +3735,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_cModule, "==", jit_rb_obj_equal);
     yjit_reg_method(rb_cSymbol, "==", jit_rb_obj_equal);
     yjit_reg_method(rb_cSymbol, "===", jit_rb_obj_equal);
+
+    yjit_reg_method(rb_cBasicObject, "initialize", jit_rb_obj_dummy);
 }
 
 void
