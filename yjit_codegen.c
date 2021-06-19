@@ -2742,6 +2742,39 @@ jit_rb_obj_class(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+bool
+jit_rb_obj_is_kind_of(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "rb_obj_is_kind_of");
+
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    VALUE comptime_mod = jit_peek_at_stack(jit, ctx, 0);
+    VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 1);
+    VALUE ret = rb_obj_is_kind_of(comptime_obj, comptime_mod);
+
+    x86opnd_t mod = ctx_stack_opnd(ctx, 0);
+    x86opnd_t obj = ctx_stack_opnd(ctx, 1);
+
+    // note: we have already guarded the receivers class to be stable
+
+    ADD_COMMENT(cb, "guard known module");
+    jit_mov_gc_ptr(jit, cb, REG1, comptime_mod);
+    cmp(cb, mod, REG1);
+    jne_ptr(cb, side_exit);
+
+    ADD_COMMENT(cb, "push result");
+    ctx_stack_pop(ctx, 2);
+    if (RTEST(ret)) {
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, imm_opnd(ret));
+    } else {
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+        mov(cb, stack_ret, imm_opnd(ret));
+    }
+    return true;
+}
+
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
 lookup_method_codegen(const rb_method_definition_t *def)
@@ -3815,6 +3848,9 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_singleton_class(rb_cThread), "current", jit_thread_s_current);
 
     yjit_reg_method(rb_mKernel, "class", jit_rb_obj_class);
+
+    yjit_reg_method(rb_mKernel, "is_a?", jit_rb_obj_is_kind_of);
+    yjit_reg_method(rb_mKernel, "kind_of?", jit_rb_obj_is_kind_of);
 }
 
 void
