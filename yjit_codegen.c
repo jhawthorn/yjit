@@ -2725,9 +2725,26 @@ jit_thread_s_current(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, 
     return true;
 }
 
+static bool
+jit_rb_obj_class(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "rb_obj_class");
+
+    // note: assumes that we've already checked for the exact class
+    VALUE comptime_recv = jit_peek_at_stack(jit, ctx, 0);
+    VALUE klass = rb_obj_class(comptime_recv);
+
+    ctx_stack_pop(ctx, 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_HEAP);
+    jit_mov_gc_ptr(jit, cb, REG0, klass);
+    mov(cb, stack_ret, REG0);
+
+    return true;
+}
+
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
-lookup_cfunc_codegen(const rb_method_definition_t *def)
+lookup_method_codegen(const rb_method_definition_t *def)
 {
     method_codegen_t gen_fn;
     if (st_lookup(yjit_method_codegen_table, def->method_serial, (st_data_t *)&gen_fn)) {
@@ -2762,7 +2779,7 @@ gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
     // Delegate to codegen for C methods if we have it.
     {
         method_codegen_t known_cfunc_codegen;
-        if ((known_cfunc_codegen = lookup_cfunc_codegen(cme->def))) {
+        if ((known_cfunc_codegen = lookup_method_codegen(cme->def))) {
             if (known_cfunc_codegen(jit, ctx, ci, cme, block, argc)) {
                 // cfunc codegen generated code. Terminate the block so
                 // there isn't multiple calls in the same block.
@@ -3045,6 +3062,19 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
         // See vm_callee_setup_arg().
         GEN_COUNTER_INC(cb, send_iseq_complex_callee);
         return YJIT_CANT_COMPILE;
+    }
+
+
+    {
+        method_codegen_t known_iseq_codegen;
+        if ((known_iseq_codegen = lookup_method_codegen(cme->def))) {
+            if (known_iseq_codegen(jit, ctx, ci, cme, block, argc)) {
+                // iseq codegen generated code. Terminate the block so
+                // there isn't multiple calls in the same block.
+                jit_jump_to_next_insn(jit, ctx);
+                return YJIT_END_BLOCK;
+            }
+        }
     }
 
     // The starting pc of the callee frame
@@ -3743,9 +3773,7 @@ yjit_reg_method(VALUE klass, const char *mid_str, method_codegen_t gen_fn)
         rb_bug("undefined optimized method: %s", rb_id2name(mid));
     }
 
-    // For now, only cfuncs are supported
     VM_ASSERT(me && me->def);
-    VM_ASSERT(me->def->type == VM_METHOD_TYPE_CFUNC);
 
     st_insert(yjit_method_codegen_table, (st_data_t)me->def->method_serial, (st_data_t)gen_fn);
 }
@@ -3785,6 +3813,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_cString, "to_str", jit_rb_str_to_s);
 
     yjit_reg_method(rb_singleton_class(rb_cThread), "current", jit_thread_s_current);
+
+    yjit_reg_method(rb_mKernel, "class", jit_rb_obj_class);
 }
 
 void
