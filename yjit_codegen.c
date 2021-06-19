@@ -2202,6 +2202,17 @@ gen_opt_regexpmatch2(jitstate_t *jit, ctx_t *ctx)
     return gen_opt_send_without_block(jit, ctx);
 }
 
+static codegen_status_t
+gen_opt_case_dispatch(jitstate_t* jit, ctx_t* ctx)
+{
+    // Normally this would lookup the key in a hash ane jump to an offset
+    // based on that. It's likely that our generated code will be sufficiently
+    // fast without the hash lookup (for small hashes), but it's worth
+    // actually testing and revisiting this assumption in te future.
+    ctx_stack_pop(ctx, 1);
+    return YJIT_KEEP_COMPILING; // continue with the next instruction
+}
+
 void
 gen_branchif_branch(codeblock_t* cb, uint8_t* target0, uint8_t* target1, uint8_t shape)
 {
@@ -3959,6 +3970,7 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(opt_getinlinecache), gen_opt_getinlinecache);
     yjit_reg_op(BIN(opt_invokebuiltin_delegate), gen_opt_invokebuiltin_delegate);
     yjit_reg_op(BIN(opt_invokebuiltin_delegate_leave), gen_opt_invokebuiltin_delegate);
+    yjit_reg_op(BIN(opt_case_dispatch), gen_opt_case_dispatch);
     yjit_reg_op(BIN(branchif), gen_branchif);
     yjit_reg_op(BIN(branchunless), gen_branchunless);
     yjit_reg_op(BIN(branchnil), gen_branchnil);
