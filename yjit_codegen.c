@@ -2697,6 +2697,20 @@ jit_rb_obj_itself(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, con
     return true;
 }
 
+// Codegen for rb_str_to_s
+static bool
+jit_rb_str_to_s(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    // note: assumes that we've already checked for the exact class
+    VALUE comptime_recv = jit_peek_at_stack(jit, ctx, 0);
+    if (rb_obj_class(comptime_recv) != rb_cString) {
+        // Needs str_duplicate(rb_cString, str);
+        return false;
+    }
+    ADD_COMMENT(cb, "push self");
+    return true;
+}
+
 static bool
 jit_thread_s_current(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
@@ -3767,6 +3781,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_cBasicObject, "initialize", jit_rb_obj_dummy);
 
     yjit_reg_method(rb_mKernel, "itself", jit_rb_obj_itself);
+    yjit_reg_method(rb_cString, "to_s", jit_rb_str_to_s);
+    yjit_reg_method(rb_cString, "to_str", jit_rb_str_to_s);
 
     yjit_reg_method(rb_singleton_class(rb_cThread), "current", jit_thread_s_current);
 }
