@@ -2622,6 +2622,23 @@ jit_rb_false(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb
     return true;
 }
 
+// Codegen for nil.to_s().
+static bool
+jit_rb_nil_to_s(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    // Get the global nil.to_s value
+    VALUE nil_to_s = rb_funcall(Qnil, idTo_s, 0);
+    VM_ASSERT(OBJ_FROZEN(nil_to_s));
+
+    ADD_COMMENT(cb, "nil.to_s");
+
+    ctx_stack_pop(ctx, 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_STRING);
+    jit_mov_gc_ptr(jit, cb, REG0, nil_to_s);
+    mov(cb, stack_ret, REG0);
+    return true;
+}
+
 // Codegen for rb_obj_equal().
 // object identity comparison
 static bool
@@ -3911,6 +3928,8 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_cNilClass, "nil?", jit_rb_true);
     yjit_reg_method(rb_mKernel, "nil?", jit_rb_false);
+
+    yjit_reg_method(rb_cNilClass, "to_s", jit_rb_nil_to_s);
 
     yjit_reg_method(rb_cBasicObject, "==", jit_rb_obj_equal);
     yjit_reg_method(rb_cBasicObject, "equal?", jit_rb_obj_equal);
