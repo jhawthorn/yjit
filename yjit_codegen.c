@@ -3546,8 +3546,20 @@ gen_send_general(jitstate_t *jit, ctx_t *ctx, struct rb_call_data *cd, rb_iseq_t
             GEN_COUNTER_INC(cb, send_not_implemented_method);
             return YJIT_CANT_COMPILE;
         case VM_METHOD_TYPE_OPTIMIZED:
-            GEN_COUNTER_INC(cb, send_optimized_method);
-            return YJIT_CANT_COMPILE;
+            switch (cme->def->body.optimize_type) {
+                case OPTIMIZED_METHOD_TYPE_SEND:
+                    GEN_COUNTER_INC(cb, send_optimized_method_send);
+                    return YJIT_CANT_COMPILE;
+                case OPTIMIZED_METHOD_TYPE_CALL:
+                    GEN_COUNTER_INC(cb, send_optimized_method_call);
+                    return YJIT_CANT_COMPILE;
+                case OPTIMIZED_METHOD_TYPE_BLOCK_CALL:
+                    GEN_COUNTER_INC(cb, send_optimized_method_block_call);
+                    return YJIT_CANT_COMPILE;
+                default:
+                    return YJIT_CANT_COMPILE;
+            }
+            RUBY_ASSERT(false); // unreachable
         case VM_METHOD_TYPE_MISSING:
             GEN_COUNTER_INC(cb, send_missing_method);
             return YJIT_CANT_COMPILE;
