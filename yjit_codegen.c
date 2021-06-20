@@ -2883,6 +2883,32 @@ jit_rb_obj_respond_to(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci,
     return true;
 }
 
+bool
+jit_rb_ary_first(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    if (argc != 0) {
+        return false;
+    }
+
+    ADD_COMMENT(cb, "Array#first");
+
+    x86opnd_t array = ctx_stack_pop(ctx, 1);
+
+    yjit_save_regs(cb);
+
+    mov(cb, C_ARG_REGS[0], array);
+    mov(cb, C_ARG_REGS[1], imm_opnd(0));
+    call_ptr(cb, REG0, (void *)rb_ary_entry_internal);
+
+    yjit_load_regs(cb);
+
+    // Push the return value onto the stack
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
+    mov(cb, stack_ret, RAX);
+
+    return true;
+}
+
 static codegen_status_t
 gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
@@ -3954,6 +3980,8 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_mKernel, "respond_to_missing?", jit_rb_obj_respond_to_missing);
     yjit_reg_method(rb_mKernel, "respond_to?", jit_rb_obj_respond_to);
+
+    yjit_reg_method(rb_cArray, "first", jit_rb_ary_first);
 }
 
 void
