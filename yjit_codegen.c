@@ -2744,6 +2744,43 @@ jit_rb_obj_is_kind_of(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci,
     return true;
 }
 
+bool
+jit_rb_mod_eqq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "rb_mod_eqq");
+
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    VALUE comptime_mod = jit_peek_at_stack(jit, ctx, 1);
+    // if our module was a singleton we're getting an exact match
+    VM_ASSERT(FL_TEST(CLASS_OF(comptime_mod), FL_SINGLETON));
+
+    VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
+    VALUE comptime_obj_klass = CLASS_OF(comptime_obj);
+    VALUE ret = rb_obj_is_kind_of(comptime_obj, comptime_mod);
+
+    x86opnd_t mod = ctx_stack_opnd(ctx, 1);
+    x86opnd_t obj = ctx_stack_opnd(ctx, 0);
+    insn_opnd_t obj_opnd = OPND_STACK(0);
+
+    // Guard class of the object
+    mov(cb, REG0, obj);
+    if (!jit_guard_known_klass(jit, ctx, comptime_obj_klass, obj_opnd, comptime_obj, SEND_MAX_DEPTH, side_exit)) {
+        rb_warn("out of guards");
+        return false;
+    }
+
+    ADD_COMMENT(cb, "push result");
+    ctx_stack_pop(ctx, 2);
+    if (RTEST(ret)) {
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+        mov(cb, stack_ret, imm_opnd(Qtrue));
+    } else {
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+        mov(cb, stack_ret, imm_opnd(Qfalse));
+    }
+    return true;
+}
 
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
@@ -3892,6 +3929,7 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_mKernel, "class", jit_rb_obj_class);
 
+    yjit_reg_method(rb_cModule, "===", jit_rb_mod_eqq);
     yjit_reg_method(rb_mKernel, "is_a?", jit_rb_obj_is_kind_of);
     yjit_reg_method(rb_mKernel, "kind_of?", jit_rb_obj_is_kind_of);
 
