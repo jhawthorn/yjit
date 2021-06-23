@@ -816,6 +816,12 @@ rb_yjit_count_side_exit_op(const VALUE *exit_pc)
 {
     int insn = rb_vm_insn_addr2opcode((const void *)*exit_pc);
     exit_op_count[insn]++;
+
+    if (rb_const_defined(rb_cObject, rb_intern("StackProf"))) {
+        VALUE stackprof = rb_const_get(rb_cObject, rb_intern("StackProf"));
+        rb_funcall(stackprof, rb_intern("sample"), 0);
+    }
+
     return exit_pc; // This function must return exit_pc!
 }
 #endif
