@@ -819,7 +819,11 @@ rb_yjit_count_side_exit_op(const VALUE *exit_pc)
 
     if (rb_const_defined(rb_cObject, rb_intern("StackProf"))) {
         VALUE stackprof = rb_const_get(rb_cObject, rb_intern("StackProf"));
-        rb_funcall(stackprof, rb_intern("sample"), 0);
+	const rb_callable_method_entry_t *cme;
+	cme = rb_callable_method_entry(CLASS_OF(stackprof), rb_intern("sample"));
+	const rb_method_cfunc_t *cfunc = &cme->def->body.cfunc;
+	((VALUE (*)(VALUE))cfunc->func)(stackprof);
+        //rb_funcall(stackprof, rb_intern("sample"), 0);
     }
 
     return exit_pc; // This function must return exit_pc!
