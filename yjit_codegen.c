@@ -1152,6 +1152,56 @@ gen_setlocal_wc0(jitstate_t* jit, ctx_t* ctx)
     return YJIT_KEEP_COMPILING;
 }
 
+static codegen_status_t
+gen_setlocal_generic(jitstate_t *jit, ctx_t* ctx, uint32_t local_idx, uint32_t level)
+{
+    // Load environment pointer EP from CFP
+    mov(cb, REG0, member_opnd(REG_CFP, rb_control_frame_t, ep));
+
+    while (level--) {
+        // Get the previous EP from the current EP
+        // See GET_PREV_EP(ep) macro
+        // VALUE* prev_ep = ((VALUE *)((ep)[VM_ENV_DATA_INDEX_SPECVAL] & ~0x03))
+        mov(cb, REG0, mem_opnd(64, REG0, SIZEOF_VALUE * VM_ENV_DATA_INDEX_SPECVAL));
+        and(cb, REG0, imm_opnd(~0x03));
+    }
+
+    // flags & VM_ENV_FLAG_WB_REQUIRED
+    x86opnd_t flags_opnd = mem_opnd(64, REG0, sizeof(VALUE) * VM_ENV_DATA_INDEX_FLAGS);
+    test(cb, flags_opnd, imm_opnd(VM_ENV_FLAG_WB_REQUIRED));
+
+    // Create a size-exit to fall back to the interpreter
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    // if (flags & VM_ENV_FLAG_WB_REQUIRED) != 0
+    jnz_ptr(cb, side_exit);
+
+    // Pop the value to write from the stack
+    x86opnd_t stack_top = ctx_stack_pop(ctx, 1);
+    mov(cb, REG1, stack_top);
+
+    // Write the value at the environment pointer
+    const int32_t offs = -(SIZEOF_VALUE * local_idx);
+    mov(cb, mem_opnd(64, REG0, offs), REG1);
+
+    return YJIT_KEEP_COMPILING;
+}
+
+static codegen_status_t
+gen_setlocal(jitstate_t* jit, ctx_t* ctx)
+{
+    int32_t idx = (int32_t)jit_get_arg(jit, 0);
+    int32_t level = (int32_t)jit_get_arg(jit, 1);
+    return gen_setlocal_generic(jit, ctx, idx, level);
+}
+
+static codegen_status_t
+gen_setlocal_wc1(jitstate_t* jit, ctx_t* ctx)
+{
+    int32_t idx = (int32_t)jit_get_arg(jit, 0);
+    return gen_setlocal_generic(jit, ctx, idx, 1);
+}
+
 // Check that `self` is a pointer to an object on the GC heap
 static void
 guard_self_is_heap(codeblock_t *cb, x86opnd_t self_opnd, uint8_t *side_exit, ctx_t *ctx)
@@ -4077,7 +4127,9 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(getlocal), gen_getlocal);
     yjit_reg_op(BIN(getlocal_WC_0), gen_getlocal_wc0);
     yjit_reg_op(BIN(getlocal_WC_1), gen_getlocal_wc1);
+    yjit_reg_op(BIN(setlocal), gen_setlocal);
     yjit_reg_op(BIN(setlocal_WC_0), gen_setlocal_wc0);
+    yjit_reg_op(BIN(setlocal_WC_1), gen_setlocal_wc1);
     yjit_reg_op(BIN(getinstancevariable), gen_getinstancevariable);
     yjit_reg_op(BIN(setinstancevariable), gen_setinstancevariable);
     yjit_reg_op(BIN(defined), gen_defined);
