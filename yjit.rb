@@ -1,7 +1,9 @@
 module YJIT
   if defined?(Disasm)
     def self.disasm(iseq, tty: $stdout && $stdout.tty?)
-      iseq = RubyVM::InstructionSequence.of(iseq)
+      unless iseq.is_a?(RubyVM::InstructionSequence)
+        iseq = RubyVM::InstructionSequence.of(iseq)
+      end
 
       blocks = YJIT.blocks_for(iseq)
       return if blocks.empty?
