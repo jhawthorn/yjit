@@ -440,10 +440,8 @@ yjit_check_ints(codeblock_t* cb, uint8_t* side_exit)
     // Check for interrupts
     // see RUBY_VM_CHECK_INTS(ec) macro
     ADD_COMMENT(cb, "RUBY_VM_CHECK_INTS(ec)");
-    mov(cb, REG0_32, member_opnd(REG_EC, rb_execution_context_t, interrupt_mask));
-    not(cb, REG0_32);
-    test(cb, member_opnd(REG_EC, rb_execution_context_t, interrupt_flag), REG0_32);
-    jnz_ptr(cb, side_exit);
+    cmp(cb, member_opnd(REG_EC, rb_execution_context_t, interrupt_flag), imm_opnd(0));
+    jne_ptr(cb, side_exit);
 }
 
 // Generate a stubbed unconditional jump to the next bytecode instruction.
