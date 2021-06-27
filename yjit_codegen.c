@@ -3102,6 +3102,42 @@ jit_rb_ary_first(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+bool
+jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    VALUE comptime_arg0 = jit_peek_at_stack(jit, ctx, 1);
+    VALUE comptime_arg1 = jit_peek_at_stack(jit, ctx, 0);
+
+    // Only compile fixnum comparisons
+    if (!FIXNUM_P(comptime_arg0) || !FIXNUM_P(comptime_arg1)) {
+        return false;
+    }
+    // assume that arg0 is always fixnum from here
+    x86opnd_t arg0 = ctx_stack_opnd(ctx, 1);
+    x86opnd_t arg1 = ctx_stack_opnd(ctx, 0);
+    val_type_t arg1_type = ctx_get_opnd_type(ctx, OPND_STACK(0));
+
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    if (arg1_type.type != ETYPE_FIXNUM) {
+        // test argument is fixnum
+        mov(cb, REG0, arg1);
+        test(cb, REG0, imm_opnd(1));
+        jne_ptr(cb, side_exit);
+    }
+
+    cmp(cb, arg1, REG0);
+    mov(cb, REG0, imm_opnd(Qtrue));
+    mov(cb, REG1, imm_opnd(Qfalse));
+    cmovne(cb, REG0, REG1);
+
+    ctx_stack_pop(ctx, 2);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+    mov(cb, stack_ret, REG0);
+
+    return true;
+}
+
 static codegen_status_t
 gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
@@ -4187,6 +4223,9 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_mKernel, "respond_to?", jit_rb_obj_respond_to);
 
     yjit_reg_method(rb_cArray, "first", jit_rb_ary_first);
+
+    yjit_reg_method(rb_cInteger, "===", jit_rb_int_equal);
+    yjit_reg_method(rb_cInteger, "==", jit_rb_int_equal);
 }
 
 void
