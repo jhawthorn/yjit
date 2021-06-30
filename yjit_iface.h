@@ -71,6 +71,9 @@ YJIT_DECLARE_COUNTERS(
     vm_insns_count,
     compiled_iseq_count,
 
+    static_sym_count,
+    dynamic_sym_count,
+
     // Member with known name for iterating over counters
     last_member
 )

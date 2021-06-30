@@ -2246,6 +2246,7 @@ jit_guard_known_klass(jitstate_t *jit, ctx_t *ctx, VALUE known_klass, insn_opnd_
             jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
             ctx_set_opnd_type(ctx, insn_opnd, TYPE_STATIC_SYMBOL);
         }
+        GEN_COUNTER_INC(cb, static_sym_count);
     }
     else if (known_klass == rb_cFloat && FLONUM_P(sample_instance)) {
         if (val_type.type != ETYPE_FLONUM || !val_type.is_imm) {
@@ -2297,6 +2298,10 @@ jit_guard_known_klass(jitstate_t *jit, ctx_t *ctx, VALUE known_klass, insn_opnd_
         jit_mov_gc_ptr(jit, cb, REG1, known_klass);
         cmp(cb, klass_opnd, REG1);
         jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+
+        if (known_klass == rb_cSymbol) {
+            GEN_COUNTER_INC(cb, dynamic_sym_count);
+        }
     }
 
     return true;

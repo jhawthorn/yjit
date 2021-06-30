@@ -175,6 +175,9 @@ module YJIT
       $stderr.puts "ratio_in_yjit:         " + ("%9.1f" % yjit_ratio_pct) + "%"
       $stderr.puts "avg_len_in_yjit:       " + ("%10.1f" % avg_len_in_yjit)
 
+      $stderr.puts "static_sym_count:      " + ("%10d" % stats[:static_sym_count])
+      $stderr.puts "dynamic_sym_count:      " + ("%10d" % stats[:dynamic_sym_count])
+
       print_sorted_exit_counts(stats, prefix: "exit_")
     end
 
