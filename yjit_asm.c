@@ -1127,6 +1127,20 @@ alias idiv = writeRMUnary!(
 );
 */
 
+/// imul - integer multiplication
+void imul(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1)
+{
+    // TODO: only implmenting one version
+    assert (opnd0.num_bits == 64);
+    assert (opnd1.num_bits == 64);
+    assert (opnd0.type == OPND_REG);
+    assert (opnd1.type == OPND_REG);
+
+    // IMUL r64, r/m64
+    // REX.W + 0F AF /r
+    cb_write_rm(cb, false, true, opnd0, opnd1, 0xFF, 2, 0x0f, 0xaf);
+}
+
 /*
 /// imul - Signed integer multiplication with two operands
 void imul(CodeBlock cb, X86Opnd opnd0, X86Opnd opnd1)

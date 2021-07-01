@@ -316,6 +316,7 @@ void cmp(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1);
 void cdq(codeblock_t* cb);
 void cqo(codeblock_t* cb);
 void int3(codeblock_t* cb);
+void imul(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1);
 void ja_label(codeblock_t* cb, uint32_t label_idx);
 void jae_label(codeblock_t* cb, uint32_t label_idx);
 void jb_label(codeblock_t* cb, uint32_t label_idx);

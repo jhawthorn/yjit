@@ -2249,16 +2249,18 @@ gen_opt_mult(jitstate_t* jit, ctx_t* ctx)
         x86opnd_t arg1 = ctx_stack_pop(ctx, 1);
         x86opnd_t arg0 = ctx_stack_pop(ctx, 1);
 
-        // arg0 * arg1
-        yjit_save_regs(cb);
-        mov(cb, C_ARG_REGS[0], arg0);
-        mov(cb, C_ARG_REGS[1], arg1);
-        call_ptr(cb, REG0, (void *)rb_fix_mul_fix);
-        yjit_load_regs(cb);
+        mov(cb, REG0, arg0);
+        mov(cb, REG1, arg1);
+
+        sub(cb, REG0, imm_opnd(1));
+        sar(cb, REG1, imm_opnd(1));
+        imul(cb, REG0, REG1);
+        jo_ptr(cb, side_exit);
+        or(cb, REG0, imm_opnd(1));
 
         // Push the output on the stack
         x86opnd_t dst = ctx_stack_push(ctx, TYPE_FIXNUM);
-        mov(cb, dst, RAX);
+        mov(cb, dst, REG0);
 
         return YJIT_KEEP_COMPILING;
     } else {
