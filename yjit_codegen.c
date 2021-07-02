@@ -2965,7 +2965,9 @@ jit_rb_mod_eqq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
 
     VALUE comptime_mod = jit_peek_at_stack(jit, ctx, 1);
     // if our module was a singleton we're getting an exact match
-    VM_ASSERT(FL_TEST(CLASS_OF(comptime_mod), FL_SINGLETON));
+    if (!FL_TEST(CLASS_OF(comptime_mod), FL_SINGLETON)) {
+        return false;
+    }
 
     VALUE comptime_obj = jit_peek_at_stack(jit, ctx, 0);
     VALUE comptime_obj_klass = CLASS_OF(comptime_obj);
