@@ -3116,6 +3116,9 @@ jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     if (!FIXNUM_P(comptime_arg0) || !FIXNUM_P(comptime_arg1)) {
         return false;
     }
+
+    ADD_COMMENT(cb, "Fixnum ==");
+
     // assume that arg0 is always fixnum from here
     x86opnd_t arg0 = ctx_stack_opnd(ctx, 1);
     x86opnd_t arg1 = ctx_stack_opnd(ctx, 0);
@@ -3128,6 +3131,7 @@ jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
         mov(cb, REG0, arg1);
         test(cb, REG0, imm_opnd(1));
         jne_ptr(cb, side_exit);
+        ctx_upgrade_opnd_type(ctx, OPND_STACK(0), TYPE_FIXNUM);
     }
 
     cmp(cb, arg1, REG0);
