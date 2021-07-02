@@ -3146,6 +3146,63 @@ jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+static void
+gen_get_array_len(codeblock_t *cb, x86opnd_t target_reg, x86opnd_t source_reg)
+{
+    x86opnd_t flags_opnd = member_opnd(source_reg, struct RBasic, flags);
+    x86opnd_t array_heap_len = member_opnd(source_reg, struct RArray, as.heap.len);
+
+    // todo: combine flags memory accesses with a scratch reg
+    mov(cb, target_reg, flags_opnd);
+    and(cb, target_reg, imm_opnd(RARRAY_EMBED_LEN_MASK));
+    shr(cb, target_reg, imm_opnd(RARRAY_EMBED_LEN_SHIFT));
+    test(cb, flags_opnd, imm_opnd(RARRAY_EMBED_FLAG));
+    cmovz(cb, target_reg, array_heap_len);
+}
+
+bool
+jit_rb_ary_len(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "Array.length");
+
+    x86opnd_t array = ctx_stack_opnd(ctx, 0);
+    mov(cb, REG0, array);
+
+    gen_get_array_len(cb, REG1, REG0);
+
+    // REG1 = (REG1 << 1) | 1
+    // lea REG1, [REG1 + 1 + REG1]
+    lea(cb, REG1, mem_opnd_sib(64, REG1, REG1, 1, 1));
+
+    ctx_stack_pop(ctx, 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FIXNUM);
+    mov(cb, stack_ret, REG1);
+
+    return true;
+}
+
+bool
+jit_rb_ary_empty_p(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "Array.empty?");
+
+    x86opnd_t array = ctx_stack_opnd(ctx, 0);
+    mov(cb, REG0, array);
+
+    gen_get_array_len(cb, REG1, REG0);
+
+    test(cb, REG1, REG1);
+    mov(cb, REG0, imm_opnd(Qfalse));
+    mov(cb, REG1, imm_opnd(Qtrue));
+    cmovz(cb, REG0, REG1);
+
+    ctx_stack_pop(ctx, 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
+    mov(cb, stack_ret, REG0);
+
+    return true;
+}
+
 static codegen_status_t
 gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
@@ -4234,6 +4291,10 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_cInteger, "===", jit_rb_int_equal);
     yjit_reg_method(rb_cInteger, "==", jit_rb_int_equal);
+
+    yjit_reg_method(rb_cArray, "empty?", jit_rb_ary_empty_p);
+    yjit_reg_method(rb_cArray, "length", jit_rb_ary_len);
+    yjit_reg_method(rb_cArray, "size", jit_rb_ary_len);
 }
 
 void
