@@ -3146,6 +3146,32 @@ jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
     return true;
 }
 
+bool
+jit_rb_int_uminus(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    VALUE comptime_recv = jit_peek_at_stack(jit, ctx, 0);
+
+    // Only compile fixnum comparisons
+    if (!FIXNUM_P(comptime_recv)) {
+        return false;
+    }
+
+    ADD_COMMENT(cb, "Fixnum -@");
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    x86opnd_t recv = ctx_stack_opnd(ctx, 0);
+    mov(cb, REG0, recv);
+    not(cb, REG0);
+    add(cb, REG0, imm_opnd(3));
+    jo_ptr(cb, side_exit);
+
+    ctx_stack_pop(ctx, 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FIXNUM);
+    mov(cb, stack_ret, REG0);
+
+    return true;
+}
+
 static void
 gen_get_array_len(codeblock_t *cb, x86opnd_t target_reg, x86opnd_t source_reg)
 {
@@ -3389,6 +3415,7 @@ gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
     );
 
     // cfunc calls may corrupt types
+    ADD_COMMENT(cb, "(cleared local types)");
     ctx_clear_local_types(ctx);
 
     // Note: gen_oswb_iseq() jumps to the next instruction with ctx->sp_offset == 0
@@ -3664,6 +3691,7 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
     ctx_upgrade_opnd_type(&callee_ctx, OPND_SELF, recv_type);
 
     // The callee might change locals through Kernel#binding and other means.
+    ADD_COMMENT(cb, "(cleared local types)");
     ctx_clear_local_types(ctx);
 
     // Pop arguments and receiver in return context, push the return value
@@ -3981,6 +4009,7 @@ gen_invokesuper(jitstate_t *jit, ctx_t *ctx)
     assume_method_lookup_stable(comptime_recv_klass, cme, jit->block);
 
     // Method calls may corrupt types
+    ADD_COMMENT(cb, "(cleared local types)");
     ctx_clear_local_types(ctx);
 
     switch (cme->def->type) {
@@ -4291,6 +4320,7 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_cInteger, "===", jit_rb_int_equal);
     yjit_reg_method(rb_cInteger, "==", jit_rb_int_equal);
+    yjit_reg_method(rb_cInteger, "-@", jit_rb_int_uminus);
 
     yjit_reg_method(rb_cArray, "empty?", jit_rb_ary_empty_p);
     yjit_reg_method(rb_cArray, "length", jit_rb_ary_len);
