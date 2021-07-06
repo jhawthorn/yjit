@@ -1127,6 +1127,19 @@ alias idiv = writeRMUnary!(
 );
 */
 
+/// idiv - Signed integer division
+void idiv(codeblock_t* cb, x86opnd_t opnd)
+{
+    write_rm_unary(
+        cb,
+        "idiv",
+        0xF6, // opMemReg8
+        0xF7, // opMemRegPref
+        0x07,  // opExt
+        opnd
+    );
+}
+
 /// imul - integer multiplication
 void imul(codeblock_t* cb, x86opnd_t opnd0, x86opnd_t opnd1)
 {

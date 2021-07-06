@@ -2271,6 +2271,14 @@ gen_opt_mult(jitstate_t* jit, ctx_t* ctx)
 
 VALUE rb_vm_opt_mod(VALUE recv, VALUE obj);
 
+// must not overflow
+static void
+int_to_fix(codeblock_t* cb, x86opnd_t dst, x86opnd_t src) {
+    // dst = (src << 1) | 1
+    // lea dst, [src + 1 + src]
+    lea(cb, dst, mem_opnd_sib(64, src, src, 1, 1));
+}
+
 static codegen_status_t
 gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
 {
@@ -2297,20 +2305,26 @@ gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
         x86opnd_t arg1 = ctx_stack_pop(ctx, 1);
         x86opnd_t arg0 = ctx_stack_pop(ctx, 1);
 
-        mov(cb, REG0, arg1);
-        test(cb, REG0, REG0);
+        mov(cb, RCX, arg1);
+        sub(cb, RCX, imm_opnd(1));
+        test(cb, RCX, RCX);
         jz_ptr(cb, side_exit);
 
-        // arg0 % arg1
-        yjit_save_regs(cb);
-        mov(cb, C_ARG_REGS[0], arg0);
-        mov(cb, C_ARG_REGS[1], arg1);
-        call_ptr(cb, REG0, (void *)rb_fix_mod_fix);
-        yjit_load_regs(cb);
+        mov(cb, RAX, arg0);
+
+        push(cb, RDX);
+        xor(cb, RDX, RDX); // RDX = 0
+
+        // RDX:RAX / RCX -> RAX quotient, RDX remainder
+        idiv(cb, RCX);
+
+        mov(cb, REG0, RDX);
+
+        pop(cb, RDX);
 
         // Push the output on the stack
         x86opnd_t dst = ctx_stack_push(ctx, TYPE_FIXNUM);
-        mov(cb, dst, RAX);
+        mov(cb, dst, REG0);
 
         return YJIT_KEEP_COMPILING;
     } else {
