@@ -13,6 +13,7 @@
 // Scratch registers used by YJIT
 #define REG0 RAX
 #define REG1 RCX
+#define REG2 R8
 #define REG0_32 EAX
 #define REG1_32 ECX
 

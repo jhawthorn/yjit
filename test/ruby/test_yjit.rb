@@ -49,6 +49,20 @@ class TestYJIT < Test::Unit::TestCase
     assert_compiles('123 == 456', insns: %i[opt_eq], result: false)
   end
 
+  def test_compile_div_fixnum
+    assert_compiles('10 / 3', result: 3)
+    assert_compiles('10 / -3', result: -4, exits: :any)
+    assert_compiles('-10 / 3', result: -4, exits: :any)
+    assert_compiles('-10 / -3', result: 3, exits: :any)
+  end
+
+  def test_compile_mod_fixnum
+    assert_compiles('10 % 3', result: 1)
+    assert_compiles('10 % -3', result: -2, exits: :any)
+    assert_compiles('-10 % 3', result: 2, exits: :any)
+    assert_compiles('-10 % -3', result: -1, exits: :any)
+  end
+
   def test_compile_eq_string
     assert_compiles('-"" == -""', insns: %i[opt_eq], result: true)
     assert_compiles('-"foo" == -"foo"', insns: %i[opt_eq], result: true)

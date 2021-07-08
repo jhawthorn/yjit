@@ -2209,13 +2209,6 @@ gen_opt_plus(jitstate_t* jit, ctx_t* ctx)
 }
 
 static codegen_status_t
-gen_opt_div(jitstate_t* jit, ctx_t* ctx)
-{
-    // Delegate to send, call the method on the recv
-    return gen_opt_send_without_block(jit, ctx);
-}
-
-static codegen_status_t
 gen_opt_mult(jitstate_t* jit, ctx_t* ctx)
 {
     if (!jit_at_current_insn(jit)) {
@@ -2281,7 +2274,7 @@ gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
 
     VALUE comptime_a = jit_peek_at_stack(jit, ctx, 0);
     VALUE comptime_b = jit_peek_at_stack(jit, ctx, 1);
-    if (RB_TYPE_P(comptime_a, T_FIXNUM) && RB_TYPE_P(comptime_b, T_FIXNUM)) {
+    if (FIXNUM_P(comptime_a) && FIXNUM_P(comptime_b)) {
         // Create a size-exit to fall back to the interpreter
         // Note: we generate the side-exit before popping operands from the stack
         uint8_t* side_exit = yjit_side_exit(jit, ctx);
@@ -2299,20 +2292,82 @@ gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
 
         mov(cb, RCX, arg1);
         sub(cb, RCX, imm_opnd(1));
-        test(cb, RCX, RCX);
-        jz_ptr(cb, side_exit);
+        // Side exit if arg1 <= 0
+        jle_ptr(cb, side_exit);
 
         mov(cb, RAX, arg0);
+        test(cb, RAX, RAX);
+        // Side exit if arg0 < 0
+        js_ptr(cb, side_exit);
 
-        push(cb, RDX);
+        // RDX is REG_SP, so we need to save it in order to idiv
+        mov(cb, REG2, RDX);
+
         xor(cb, RDX, RDX); // RDX = 0
 
         // RDX:RAX / RCX -> RAX quotient, RDX remainder
         idiv(cb, RCX);
 
-        mov(cb, REG0, RDX);
+        xchg(cb, REG2, RDX);
 
-        pop(cb, RDX);
+        // Push the output on the stack
+        x86opnd_t dst = ctx_stack_push(ctx, TYPE_FIXNUM);
+        mov(cb, dst, REG2);
+
+        return YJIT_KEEP_COMPILING;
+    } else {
+        // Delegate to send, call the method on the recv
+        return gen_opt_send_without_block(jit, ctx);
+    }
+}
+
+static codegen_status_t
+gen_opt_div(jitstate_t* jit, ctx_t* ctx)
+{
+    if (!jit_at_current_insn(jit)) {
+        defer_compilation(jit->block, jit->insn_idx, ctx);
+        return YJIT_END_BLOCK;
+    }
+
+    VALUE comptime_a = jit_peek_at_stack(jit, ctx, 0);
+    VALUE comptime_b = jit_peek_at_stack(jit, ctx, 1);
+    if (FIXNUM_P(comptime_a) && FIXNUM_P(comptime_b)) {
+        // Create a size-exit to fall back to the interpreter
+        // Note: we generate the side-exit before popping operands from the stack
+        uint8_t* side_exit = yjit_side_exit(jit, ctx);
+
+        if (!assume_bop_not_redefined(jit->block, INTEGER_REDEFINED_OP_FLAG, BOP_DIV)) {
+            return YJIT_CANT_COMPILE;
+        }
+
+        // Check that both operands are fixnums
+        guard_two_fixnums(ctx, side_exit);
+
+        // Get the operands and destination from the stack
+        x86opnd_t arg1 = ctx_stack_pop(ctx, 1);
+        x86opnd_t arg0 = ctx_stack_pop(ctx, 1);
+
+        mov(cb, RCX, arg1);
+        sub(cb, RCX, imm_opnd(1));
+        // Side exit if arg1 <= 0
+        jle_ptr(cb, side_exit);
+
+        mov(cb, RAX, arg0);
+        test(cb, RAX, RAX);
+        // Side exit if arg0 < 0
+        js_ptr(cb, side_exit);
+
+        // RDX is REG_SP, so we need to save it in order to idiv
+        mov(cb, REG2, RDX);
+
+        xor(cb, RDX, RDX); // RDX = 0
+
+        // RDX:RAX / RCX -> RAX quotient, RDX remainder
+        idiv(cb, RCX);
+
+        mov(cb, RDX, REG2);
+
+        int_to_fix(cb, REG0, RAX);
 
         // Push the output on the stack
         x86opnd_t dst = ctx_stack_push(ctx, TYPE_FIXNUM);
@@ -4275,6 +4330,13 @@ gen_getblockparamproxy(jitstate_t *jit, ctx_t *ctx)
     return YJIT_KEEP_COMPILING;
 }
 
+static codegen_status_t
+gen_invokebuiltin(jitstate_t *jit, ctx_t *ctx)
+{
+    jit_print_loc(jit, "invokebuiltin");
+    return YJIT_CANT_COMPILE;
+}
+
 // opt_invokebuiltin_delegate calls a builtin function, like
 // invokebuiltin does, but instead of taking arguments from the top of the
 // stack uses the argument locals (and self) from the current method.
@@ -4467,6 +4529,7 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(opt_length), gen_opt_length);
     yjit_reg_op(BIN(opt_regexpmatch2), gen_opt_regexpmatch2);
     yjit_reg_op(BIN(opt_getinlinecache), gen_opt_getinlinecache);
+    yjit_reg_op(BIN(invokebuiltin), gen_invokebuiltin);
     yjit_reg_op(BIN(opt_invokebuiltin_delegate), gen_opt_invokebuiltin_delegate);
     yjit_reg_op(BIN(opt_invokebuiltin_delegate_leave), gen_opt_invokebuiltin_delegate);
     yjit_reg_op(BIN(opt_case_dispatch), gen_opt_case_dispatch);
