@@ -4333,8 +4333,48 @@ gen_getblockparamproxy(jitstate_t *jit, ctx_t *ctx)
 static codegen_status_t
 gen_invokebuiltin(jitstate_t *jit, ctx_t *ctx)
 {
-    jit_print_loc(jit, "invokebuiltin");
-    return YJIT_CANT_COMPILE;
+    const struct rb_builtin_function *bf = (struct rb_builtin_function *)jit_get_arg(jit, 0);
+    int32_t start_index = (int32_t)jit_get_arg(jit, 0);
+
+    if (bf->argc + 2 > NUM_C_ARG_REGS) {
+        return YJIT_CANT_COMPILE;
+    }
+
+    // If the calls don't allocate, do they need up to date PC, SP?
+    jit_save_pc(jit, REG0);
+    jit_save_sp(jit, ctx);
+
+    // Save YJIT registers
+    yjit_save_regs(cb);
+
+    // Save SP in REG0
+    mov(cb, REG0, REG_SP);
+
+    // Save self from CFP
+    mov(cb, REG1, member_opnd(REG_CFP, rb_control_frame_t, self));
+
+    // Call the builtin func (ec, recv, arg1, arg2, ...)
+    mov(cb, C_ARG_REGS[0], REG_EC); // clobbers REG_CFP
+    mov(cb, C_ARG_REGS[1], REG1); // self, clobbers REG_EC
+
+    // Copy arguments from locals
+    for (int32_t i = 0; i < bf->argc; i++) {
+        x86opnd_t stack_opnd = mem_opnd(64, REG0, -(bf->argc - i) * SIZEOF_VALUE);
+        x86opnd_t c_arg_reg = C_ARG_REGS[2 + i];
+        mov(cb, c_arg_reg, stack_opnd);
+    }
+
+    call_ptr(cb, REG0, (void *)bf->func_ptr);
+
+    // Load YJIT registers
+    yjit_load_regs(cb);
+
+    // Push the return value
+    ctx_stack_pop(ctx, bf->argc);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
+    mov(cb, stack_ret, RAX);
+
+    return YJIT_KEEP_COMPILING;
 }
 
 // opt_invokebuiltin_delegate calls a builtin function, like
@@ -4346,7 +4386,7 @@ gen_opt_invokebuiltin_delegate(jitstate_t *jit, ctx_t *ctx)
     const struct rb_builtin_function *bf = (struct rb_builtin_function *)jit_get_arg(jit, 0);
     int32_t start_index = (int32_t)jit_get_arg(jit, 1);
 
-    if (bf->argc + 2 >= NUM_C_ARG_REGS) {
+    if (bf->argc + 2 > NUM_C_ARG_REGS) {
         return YJIT_CANT_COMPILE;
     }
 
