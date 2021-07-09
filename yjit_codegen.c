@@ -3224,7 +3224,7 @@ jit_rb_int_uminus(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, con
     mov(cb, REG0, recv);
     not(cb, REG0);
     add(cb, REG0, imm_opnd(3));
-    jo_ptr(cb, side_exit);
+    jo_ptr(cb, side_exit); // in case of -(FIXNUM_MIN)
 
     ctx_stack_pop(ctx, 1);
     x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FIXNUM);
