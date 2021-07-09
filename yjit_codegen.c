@@ -2953,6 +2953,34 @@ jit_rb_str_to_s(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const
     return true;
 }
 
+// Codegen for rb_sym_to_s
+static bool
+jit_rb_sym_to_s(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    // note: assumes that we've already checked for the exact class
+
+    ADD_COMMENT(cb, "Symbol#to_s");
+
+    // we are allocating
+    jit_save_pc(jit, REG0);
+    jit_save_sp(jit, ctx);
+
+    x86opnd_t self = ctx_stack_pop(ctx, 1);
+
+    // Save YJIT registers
+    yjit_save_regs(cb);
+
+    mov(cb, C_ARG_REGS[0], self);
+    call_ptr(cb, REG0, (void *)rb_sym_to_s);
+
+    yjit_load_regs(cb);
+
+    // push result
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_STRING);
+    mov(cb, stack_ret, RAX);
+    return true;
+}
+
 static bool
 jit_thread_s_current(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
 {
@@ -4469,6 +4497,8 @@ yjit_init_optimized_methods()
     yjit_reg_method(rb_mKernel, "itself", jit_rb_obj_itself);
     yjit_reg_method(rb_cString, "to_s", jit_rb_str_to_s);
     yjit_reg_method(rb_cString, "to_str", jit_rb_str_to_s);
+
+    yjit_reg_method(rb_cSymbol, "to_s", jit_rb_sym_to_s);
 
     yjit_reg_method(rb_singleton_class(rb_cThread), "current", jit_thread_s_current);
 
