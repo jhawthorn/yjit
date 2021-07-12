@@ -4118,6 +4118,10 @@ gen_invokesuper(jitstate_t *jit, ctx_t *ctx)
         case VM_METHOD_TYPE_ISEQ:
         case VM_METHOD_TYPE_CFUNC:
             break;
+	case VM_METHOD_TYPE_IVAR:
+	    if (argc != 0)
+                return YJIT_CANT_COMPILE;
+	    break;
         default:
             // others unimplemented
             return YJIT_CANT_COMPILE;
@@ -4163,6 +4167,11 @@ gen_invokesuper(jitstate_t *jit, ctx_t *ctx)
             return gen_send_iseq(jit, ctx, ci, cme, block, argc);
         case VM_METHOD_TYPE_CFUNC:
             return gen_send_cfunc(jit, ctx, ci, cme, block, argc);
+	case VM_METHOD_TYPE_IVAR:
+	    mov(cb, REG0, recv);
+
+	    ID ivar_name = cme->def->body.attr.id;
+	    return gen_get_ivar(jit, ctx, SEND_MAX_DEPTH, comptime_recv, ivar_name, recv_opnd, side_exit);
         default:
             break;
     }
