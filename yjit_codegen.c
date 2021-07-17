@@ -784,6 +784,36 @@ gen_splatarray(jitstate_t* jit, ctx_t* ctx)
     return YJIT_KEEP_COMPILING;
 }
 
+// new range initialized from top 2 values
+static codegen_status_t
+gen_newrange(jitstate_t* jit, ctx_t* ctx)
+{
+    rb_num_t flag = (rb_num_t)jit_get_arg(jit, 0);
+
+    // rb_range_new() allocates and can raise
+    jit_save_pc(jit, REG1);
+    jit_save_sp(jit, ctx);
+
+    // val = rb_range_new(low, high, (int)flag);
+
+    // These could probably be mov'd directly onto the C_ARG_REGS
+    mov(cb, REG0, ctx_stack_opnd(ctx, 1));
+    mov(cb, REG1, ctx_stack_opnd(ctx, 0));
+
+    yjit_save_regs(cb);
+    mov(cb, C_ARG_REGS[0], REG0);
+    mov(cb, C_ARG_REGS[1], REG1);
+    mov(cb, C_ARG_REGS[2], imm_opnd(flag));
+    call_ptr(cb, REG0, (void *)rb_range_new);
+    yjit_load_regs(cb);
+
+    ctx_stack_pop(ctx, 2);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_HEAP);
+    mov(cb, stack_ret, RAX);
+
+    return YJIT_KEEP_COMPILING;
+}
+
 static void
 guard_object_is_heap(codeblock_t *cb, x86opnd_t object_opnd, ctx_t *ctx, uint8_t *side_exit)
 {
@@ -4040,6 +4070,7 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(splatarray), gen_splatarray);
     yjit_reg_op(BIN(expandarray), gen_expandarray);
     yjit_reg_op(BIN(newhash), gen_newhash);
+    yjit_reg_op(BIN(newrange), gen_newrange);
     yjit_reg_op(BIN(concatstrings), gen_concatstrings);
     yjit_reg_op(BIN(putnil), gen_putnil);
     yjit_reg_op(BIN(putobject), gen_putobject);
