@@ -2308,11 +2308,12 @@ gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
         // RDX:RAX / RCX -> RAX quotient, RDX remainder
         idiv(cb, RCX);
 
-        xchg(cb, REG2, RDX);
+        mov(cb, REG0, RDX);
+        mov(cb, RDX, REG2);
 
         // Push the output on the stack
         x86opnd_t dst = ctx_stack_push(ctx, TYPE_FIXNUM);
-        mov(cb, dst, REG2);
+        mov(cb, dst, REG0);
 
         return YJIT_KEEP_COMPILING;
     } else {
