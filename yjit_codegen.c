@@ -183,6 +183,28 @@ _counted_side_exit(uint8_t *existing_side_exit, int64_t *counter)
     return start;
 }
 
+#define DEBUG_EXIT(side_exit, jit, msg) _debug_side_exit(side_exit, jit, msg)
+static uint8_t *
+_debug_side_exit(uint8_t *existing_side_exit, jitstate_t *jit, const char *msg)
+{
+    if (!rb_yjit_opts.gen_stats) return existing_side_exit;
+
+    /* this leaks memory */
+    char *ptr;
+    long len;
+    VALUE path = rb_iseq_path(jit->iseq);
+    RSTRING_GETMEM(path, ptr, len);
+
+    char *message;
+    asprintf(&message, "%s %.*s:%u", msg, (int)len, ptr, rb_iseq_line_no(jit->iseq, jit->insn_idx));
+
+    uint8_t *start = cb_get_ptr(ocb, ocb->write_pos);
+    print_str(ocb, message);
+    print_ptr(ocb, REG0);
+    jmp_ptr(ocb, existing_side_exit);
+    return start;
+}
+
 // Add a comment at the current position in the code block
 static void
 _add_comment(codeblock_t* cb, const char* comment_str)
