@@ -27,6 +27,9 @@ YJIT_DECLARE_COUNTERS(
 
     send_callsite_not_simple,
     send_kw_splat,
+    send_args_splat,
+    send_args_blockarg,
+    send_kwarg,
     send_ivar_set_method,
     send_zsuper_method,
     send_undef_method,

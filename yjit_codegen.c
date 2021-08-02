@@ -3925,10 +3925,21 @@ gen_send_general(jitstate_t *jit, ctx_t *ctx, struct rb_call_data *cd, rb_iseq_t
         return YJIT_CANT_COMPILE;
     }
 
-    // Don't JIT calls that aren't simple
-    // Note, not using VM_CALL_ARGS_SIMPLE because sometimes we pass a block.
-    if ((vm_ci_flag(ci) & (VM_CALL_KW_SPLAT | VM_CALL_KWARG | VM_CALL_ARGS_SPLAT | VM_CALL_ARGS_BLOCKARG)) != 0) {
-        GEN_COUNTER_INC(cb, send_callsite_not_simple);
+    // Don't JIT calls with arg splat
+    if (vm_ci_flag(ci) & VM_CALL_ARGS_SPLAT) {
+        GEN_COUNTER_INC(cb, send_args_splat);
+        return YJIT_CANT_COMPILE;
+    }
+
+    // Don't JIT calls with arg splat
+    if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
+        GEN_COUNTER_INC(cb, send_args_blockarg);
+        return YJIT_CANT_COMPILE;
+    }
+
+    // Don't JIT calls with arg splat
+    if ((vm_ci_flag(ci) & VM_CALL_KWARG) != 0) {
+        GEN_COUNTER_INC(cb, send_kwarg);
         return YJIT_CANT_COMPILE;
     }
 
