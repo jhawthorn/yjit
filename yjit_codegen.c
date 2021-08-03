@@ -1946,26 +1946,33 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             return YJIT_CANT_COMPILE;
         }
 
-        // Pop the stack operands
-        x86opnd_t idx_opnd = ctx_stack_pop(ctx, 1);
-        x86opnd_t recv_opnd = ctx_stack_pop(ctx, 1);
-        mov(cb, REG0, recv_opnd);
+        val_type_t idx_type  = ctx_get_opnd_type(ctx, OPND_STACK(0));
+        val_type_t recv_type = ctx_get_opnd_type(ctx, OPND_STACK(1));
+        x86opnd_t idx_opnd = ctx_stack_opnd(ctx, 0);
+        x86opnd_t recv_opnd = ctx_stack_opnd(ctx, 1);
 
-        // if (SPECIAL_CONST_P(recv)) {
-        // Bail if receiver is not a heap object
-        test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
-        jnz_ptr(cb, side_exit);
-        cmp(cb, REG0, imm_opnd(Qfalse));
-        je_ptr(cb, side_exit);
-        cmp(cb, REG0, imm_opnd(Qnil));
-        je_ptr(cb, side_exit);
+        if (recv_type.type != ETYPE_HASH) {
+            mov(cb, REG0, recv_opnd);
 
-        // Bail if recv has a class other than ::Hash.
-        // BOP_AREF check above is only good for ::Hash.
-        mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
-        mov(cb, REG0, const_ptr_opnd((void *)rb_cHash));
-        cmp(cb, REG0, REG1);
-        jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
+            // if (SPECIAL_CONST_P(recv)) {
+            // Bail if receiver is not a heap object
+            if (!recv_type.is_heap) {
+                test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
+                jnz_ptr(cb, side_exit);
+                cmp(cb, REG0, imm_opnd(Qfalse));
+                je_ptr(cb, side_exit);
+                cmp(cb, REG0, imm_opnd(Qnil));
+                je_ptr(cb, side_exit);
+            }
+
+            // Bail if recv has a class other than ::Hash.
+            // BOP_AREF check above is only good for ::Hash.
+            mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
+            mov(cb, REG0, const_ptr_opnd((void *)rb_cHash));
+            cmp(cb, REG0, REG1);
+            jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
+            ctx_upgrade_opnd_type(ctx, OPND_STACK(1), TYPE_HASH);
+        }
 
         // Call VALUE rb_hash_aref(VALUE hash, VALUE key).
         {
@@ -1977,6 +1984,7 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             mov(cb, C_ARG_REGS[1], idx_opnd);
 
             // Write sp to cfp->sp since rb_hash_aref might need to call #hash on the key
+            ctx_stack_pop(ctx, 2);
             jit_save_sp(jit, ctx);
 
             call_ptr(cb, REG0, (void *)rb_hash_aref);
