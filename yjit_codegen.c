@@ -2577,14 +2577,22 @@ jit_guard_known_klass(jitstate_t *jit, ctx_t *ctx, VALUE known_klass, insn_opnd_
             ctx_upgrade_opnd_type(ctx, insn_opnd, TYPE_HEAP);
         }
 
-        x86opnd_t klass_opnd = mem_opnd(64, REG0, offsetof(struct RBasic, klass));
+        if (val_type.type == ETYPE_UNKNOWN) {
+            x86opnd_t klass_opnd = mem_opnd(64, REG0, offsetof(struct RBasic, klass));
 
-        // Bail if receiver class is different from known_klass
-        // TODO: jit_mov_gc_ptr keeps a strong reference, which leaks the class.
-        ADD_COMMENT(cb, "guard known class");
-        jit_mov_gc_ptr(jit, cb, REG1, known_klass);
-        cmp(cb, klass_opnd, REG1);
-        jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+            // Bail if receiver class is different from known_klass
+            // TODO: jit_mov_gc_ptr keeps a strong reference, which leaks the class.
+            ADD_COMMENT(cb, "guard known class");
+            jit_mov_gc_ptr(jit, cb, REG1, known_klass);
+            cmp(cb, klass_opnd, REG1);
+            jit_chain_guard(JCC_JNE, jit, ctx, max_chain_depth, side_exit);
+
+            // If we track this klass, learn the type
+            ctx_upgrade_opnd_type(ctx, insn_opnd, yjit_type_of_heap_klass(known_klass));
+        } else {
+            // Type is already known
+            RUBY_ASSERT(yjit_type_of_heap_klass(known_klass).type == val_type.type);
+        }
     }
 
     return true;
