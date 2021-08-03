@@ -1885,31 +1885,43 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             return YJIT_CANT_COMPILE;
         }
 
-        // Pop the stack operands
-        x86opnd_t idx_opnd = ctx_stack_pop(ctx, 1);
-        x86opnd_t recv_opnd = ctx_stack_pop(ctx, 1);
-        mov(cb, REG0, recv_opnd);
+        val_type_t idx_type  = ctx_get_opnd_type(ctx, OPND_STACK(0));
+        val_type_t recv_type = ctx_get_opnd_type(ctx, OPND_STACK(1));
+        x86opnd_t idx_opnd = ctx_stack_opnd(ctx, 0);
+        x86opnd_t recv_opnd = ctx_stack_opnd(ctx, 1);
 
-        // if (SPECIAL_CONST_P(recv)) {
-        // Bail if receiver is not a heap object
-        test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
-        jnz_ptr(cb, side_exit);
-        cmp(cb, REG0, imm_opnd(Qfalse));
-        je_ptr(cb, side_exit);
-        cmp(cb, REG0, imm_opnd(Qnil));
-        je_ptr(cb, side_exit);
+        if (recv_type.type != ETYPE_ARRAY) {
+            ADD_COMMENT(cb, "guard Array receiver");
+            mov(cb, REG0, recv_opnd);
 
-        // Bail if recv has a class other than ::Array.
-        // BOP_AREF check above is only good for ::Array.
-        mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
-        mov(cb, REG0, const_ptr_opnd((void *)rb_cArray));
-        cmp(cb, REG0, REG1);
-        jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
+            // if (SPECIAL_CONST_P(recv)) {
+            // Bail if receiver is not a heap object
+            if (!idx_type.is_heap) {
+                test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
+                jnz_ptr(cb, side_exit);
+                cmp(cb, REG0, imm_opnd(Qfalse));
+                je_ptr(cb, side_exit);
+                cmp(cb, REG0, imm_opnd(Qnil));
+                je_ptr(cb, side_exit);
+            }
 
-        // Bail if idx is not a FIXNUM
+            // Bail if recv has a class other than ::Array.
+            // BOP_AREF check above is only good for ::Array.
+            mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
+            mov(cb, REG0, const_ptr_opnd((void *)rb_cArray));
+            cmp(cb, REG0, REG1);
+            jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
+            ctx_upgrade_opnd_type(ctx, OPND_STACK(1), TYPE_ARRAY);
+        }
+
         mov(cb, REG1, idx_opnd);
-        test(cb, REG1, imm_opnd(RUBY_FIXNUM_FLAG));
-        jz_ptr(cb, COUNTED_EXIT(side_exit, oaref_arg_not_fixnum));
+        if (idx_type.type != ETYPE_FIXNUM) {
+            ADD_COMMENT(cb, "guard FIXNUM index");
+            // Bail if idx is not a FIXNUM
+            test(cb, REG1, imm_opnd(RUBY_FIXNUM_FLAG));
+            jz_ptr(cb, COUNTED_EXIT(side_exit, oaref_arg_not_fixnum));
+            ctx_upgrade_opnd_type(ctx, OPND_STACK(0), TYPE_FIXNUM);
+        }
 
         // Call VALUE rb_ary_entry_internal(VALUE ary, long offset).
         // It never raises or allocates, so we don't need to write to cfp->pc.
@@ -1920,6 +1932,7 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             call_ptr(cb, REG0, (void *)rb_ary_entry_internal);
 
             // Push the return value onto the stack
+            ctx_stack_pop(ctx, 2);
             x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
             mov(cb, stack_ret, RAX);
         }
