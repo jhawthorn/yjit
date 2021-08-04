@@ -1891,27 +1891,8 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
         x86opnd_t recv_opnd = ctx_stack_opnd(ctx, 1);
 
         if (recv_type.type != ETYPE_ARRAY) {
-            ADD_COMMENT(cb, "guard Array receiver");
             mov(cb, REG0, recv_opnd);
-
-            // if (SPECIAL_CONST_P(recv)) {
-            // Bail if receiver is not a heap object
-            if (!idx_type.is_heap) {
-                test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
-                jnz_ptr(cb, side_exit);
-                cmp(cb, REG0, imm_opnd(Qfalse));
-                je_ptr(cb, side_exit);
-                cmp(cb, REG0, imm_opnd(Qnil));
-                je_ptr(cb, side_exit);
-            }
-
-            // Bail if recv has a class other than ::Array.
-            // BOP_AREF check above is only good for ::Array.
-            mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
-            mov(cb, REG0, const_ptr_opnd((void *)rb_cArray));
-            cmp(cb, REG0, REG1);
-            jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
-            ctx_upgrade_opnd_type(ctx, OPND_STACK(1), TYPE_ARRAY);
+            jit_guard_known_klass(jit, ctx, rb_cArray, OPND_STACK(1), comptime_recv, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
         }
 
         mov(cb, REG1, idx_opnd);
@@ -1946,32 +1927,13 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             return YJIT_CANT_COMPILE;
         }
 
-        val_type_t idx_type  = ctx_get_opnd_type(ctx, OPND_STACK(0));
         val_type_t recv_type = ctx_get_opnd_type(ctx, OPND_STACK(1));
         x86opnd_t idx_opnd = ctx_stack_opnd(ctx, 0);
         x86opnd_t recv_opnd = ctx_stack_opnd(ctx, 1);
 
         if (recv_type.type != ETYPE_HASH) {
             mov(cb, REG0, recv_opnd);
-
-            // if (SPECIAL_CONST_P(recv)) {
-            // Bail if receiver is not a heap object
-            if (!recv_type.is_heap) {
-                test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
-                jnz_ptr(cb, side_exit);
-                cmp(cb, REG0, imm_opnd(Qfalse));
-                je_ptr(cb, side_exit);
-                cmp(cb, REG0, imm_opnd(Qnil));
-                je_ptr(cb, side_exit);
-            }
-
-            // Bail if recv has a class other than ::Hash.
-            // BOP_AREF check above is only good for ::Hash.
-            mov(cb, REG1, mem_opnd(64, REG0, offsetof(struct RBasic, klass)));
-            mov(cb, REG0, const_ptr_opnd((void *)rb_cHash));
-            cmp(cb, REG0, REG1);
-            jit_chain_guard(JCC_JNE, jit, &starting_context, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
-            ctx_upgrade_opnd_type(ctx, OPND_STACK(1), TYPE_HASH);
+            jit_guard_known_klass(jit, ctx, rb_cHash, OPND_STACK(1), comptime_recv, OPT_AREF_MAX_CHAIN_DEPTH, side_exit);
         }
 
         // Call VALUE rb_hash_aref(VALUE hash, VALUE key).
@@ -2485,6 +2447,8 @@ Recompile as contingency if possible, or take side exit a last resort.
 static bool
 jit_guard_known_klass(jitstate_t *jit, ctx_t *ctx, VALUE known_klass, insn_opnd_t insn_opnd, VALUE sample_instance, const int max_chain_depth, uint8_t *side_exit)
 {
+    RUBY_ASSERT(CLASS_OF(sample_instance) == known_klass);
+
     val_type_t val_type = ctx_get_opnd_type(ctx, insn_opnd);
 
     if (known_klass == rb_cNilClass) {
