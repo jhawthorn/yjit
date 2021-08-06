@@ -3399,9 +3399,14 @@ jit_rb_str_empty_p(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, co
 }
 
 static codegen_status_t
-gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, int32_t argc)
 {
     const rb_method_cfunc_t *cfunc = UNALIGNED_MEMBER_PTR(cme->def, body.cfunc);
+
+    if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
+        argc--;
+    }
+    bool block_param_proxy = !!(vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG);
 
     // If the function expects a Ruby array of arguments
     if (cfunc->argc < 0 && cfunc->argc != -1) {
@@ -3456,13 +3461,26 @@ gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
     cmp(cb, REG_CFP, REG0);
     jle_ptr(cb, COUNTED_EXIT(side_exit, send_se_cf_overflow));
 
+    if (block_param_proxy) {
+        ctx_stack_pop(ctx, 1);
+    }
+
     // Points to the receiver operand on the stack
     x86opnd_t recv = ctx_stack_opnd(ctx, argc);
 
     // Store incremented PC into current control frame in case callee raises.
     jit_save_pc(jit, REG0);
 
-    if (block) {
+    if (block_param_proxy) {
+        RUBY_ASSERT(VM_ENV_LOCAL_P(jit->ec->cfp->ep));
+
+        // cfp->block_code = VM_CF_BLOCK_HANDLER(reg_cfp)
+        //   VM_ASSERT(VM_ENV_LOCAL_P(ep));
+        //   ep[VM_ENV_DATA_INDEX_SPECVAL]
+        mov(cb, REG0, member_opnd(REG_CFP, rb_control_frame_t, ep));
+        mov(cb, REG0, mem_opnd(64, REG0, VM_ENV_DATA_INDEX_SPECVAL * sizeof(VALUE)));
+        mov(cb, member_opnd(REG_CFP, rb_control_frame_t, block_code), REG0);
+    } else if (block) {
         // Change cfp->block_code in the current frame. See vm_caller_setup_arg_block().
         // VM_CFP_TO_CAPTURED_BLCOK does &cfp->self, rb_captured_block->code.iseq aliases
         // with cfp->block_code.
@@ -3483,7 +3501,10 @@ gen_send_cfunc(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const 
 
     // Write block handler at sp[-2]
     // sp[-2] = block_handler;
-    if (block) {
+    if (block_param_proxy) {
+        mov(cb, REG1, member_opnd(REG_CFP, rb_control_frame_t, block_code));
+        mov(cb, mem_opnd(64, REG0, 8 * -2), REG1);
+    } else if (block) {
         // reg1 = VM_BH_FROM_ISEQ_BLOCK(VM_CFP_TO_CAPTURED_BLOCK(reg_cfp));
         lea(cb, REG1, member_opnd(REG_CFP, rb_control_frame_t, self));
         or(cb, REG1, imm_opnd(1));
@@ -3657,7 +3678,7 @@ rb_leaf_builtin_function(const rb_iseq_t *iseq)
 }
 
 static codegen_status_t
-gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, int32_t argc)
 {
     const rb_iseq_t *iseq = def_iseq_ptr(cme->def);
 
@@ -3668,8 +3689,7 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
     }
 
     if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
-        ctx_stack_pop(ctx, 1);
-        //return YJIT_CANT_COMPILE;
+        argc--;
     }
     bool block_param_proxy = !!(vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG);
 
@@ -3768,6 +3788,10 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
         return YJIT_KEEP_COMPILING;
     }
 
+    if (block_param_proxy) {
+        ctx_stack_pop(ctx, 1);
+    }
+
     // Stack overflow check
     // #define CHECK_VM_STACK_OVERFLOW0(cfp, sp, margin)
     ADD_COMMENT(cb, "stack overflow check");
@@ -3792,9 +3816,7 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
         //   VM_ASSERT(VM_ENV_LOCAL_P(ep));
         //   ep[VM_ENV_DATA_INDEX_SPECVAL]
         mov(cb, REG0, member_opnd(REG_CFP, rb_control_frame_t, ep));
-        print_ptr(cb, REG0);
         mov(cb, REG0, mem_opnd(64, REG0, VM_ENV_DATA_INDEX_SPECVAL * sizeof(VALUE)));
-        print_ptr(cb, REG0);
         mov(cb, member_opnd(REG_CFP, rb_control_frame_t, block_code), REG0);
     } else if (block) {
         // Change cfp->block_code in the current frame. See vm_caller_setup_arg_block().
@@ -3951,8 +3973,9 @@ gen_send_general(jitstate_t *jit, ctx_t *ctx, struct rb_call_data *cd, rb_iseq_t
         return YJIT_CANT_COMPILE;
     }
 
-    // Don't JIT calls with arg splat
+    // Only rb_block_param_proxy is currently supported
     if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
+        argc++;
         if (ctx_get_opnd_type(ctx, OPND_STACK(0)).type == ETYPE_BLOCK_PARAM_PROXY) {
             // supported
         } else {
