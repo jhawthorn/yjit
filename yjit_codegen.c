@@ -3750,6 +3750,7 @@ void
 yjit_init_optimized_methods()
 {
     yjit_method_codegen_table = st_init_numtable();
+    return;
 
     yjit_reg_method(rb_cBasicObject, "!", jit_rb_obj_not);
 
@@ -3853,8 +3854,4 @@ yjit_init_codegen(void)
     yjit_reg_op(BIN(getglobal), gen_getglobal);
     yjit_reg_op(BIN(setglobal), gen_setglobal);
     yjit_reg_op(BIN(tostring), gen_tostring);
-
-    yjit_method_codegen_table = st_init_numtable();
-
-    yjit_reg_method(rb_cBasicObject, "!", jit_rb_obj_not);
 }
