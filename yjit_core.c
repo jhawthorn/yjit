@@ -346,6 +346,8 @@ yjit_type_of_value(VALUE val)
             RUBY_ASSERT(false);
             UNREACHABLE_RETURN(TYPE_IMM);
         }
+    } else if (val == rb_block_param_proxy) {
+        return TYPE_BLOCK_PARAM_PROXY;
     } else {
         return yjit_type_of_heap_klass(CLASS_OF(val));
     }

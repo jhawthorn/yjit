@@ -3667,6 +3667,12 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
         return YJIT_CANT_COMPILE;
     }
 
+    if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
+        ctx_stack_pop(ctx, 1);
+        //return YJIT_CANT_COMPILE;
+    }
+    bool block_param_proxy = !!(vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG);
+
     // Arity handling and optional parameter setup
     int num_params = iseq->body->param.size;
     uint32_t start_pc_offset = 0;
@@ -3779,7 +3785,18 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
     // Store the next PC in the current frame
     jit_save_pc(jit, REG0);
 
-    if (block) {
+    if (block_param_proxy) {
+        RUBY_ASSERT(VM_ENV_LOCAL_P(jit->ec->cfp->ep));
+
+        // cfp->block_code = VM_CF_BLOCK_HANDLER(reg_cfp)
+        //   VM_ASSERT(VM_ENV_LOCAL_P(ep));
+        //   ep[VM_ENV_DATA_INDEX_SPECVAL]
+        mov(cb, REG0, member_opnd(REG_CFP, rb_control_frame_t, ep));
+        print_ptr(cb, REG0);
+        mov(cb, REG0, mem_opnd(64, REG0, VM_ENV_DATA_INDEX_SPECVAL * sizeof(VALUE)));
+        print_ptr(cb, REG0);
+        mov(cb, member_opnd(REG_CFP, rb_control_frame_t, block_code), REG0);
+    } else if (block) {
         // Change cfp->block_code in the current frame. See vm_caller_setup_arg_block().
         // VM_CFP_TO_CAPTURED_BLCOK does &cfp->self, rb_captured_block->code.iseq aliases
         // with cfp->block_code.
@@ -3804,7 +3821,10 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
 
     // Write block handler at sp[-2]
     // sp[-2] = block_handler;
-    if (block) {
+    if (block_param_proxy) {
+        mov(cb, REG1, member_opnd(REG_CFP, rb_control_frame_t, block_code));
+        mov(cb, mem_opnd(64, REG0, 8 * -2), REG1);
+    } else if (block) {
         // reg1 = VM_BH_FROM_ISEQ_BLOCK(VM_CFP_TO_CAPTURED_BLOCK(reg_cfp));
         lea(cb, REG1, member_opnd(REG_CFP, rb_control_frame_t, self));
         or(cb, REG1, imm_opnd(1));
@@ -3933,8 +3953,12 @@ gen_send_general(jitstate_t *jit, ctx_t *ctx, struct rb_call_data *cd, rb_iseq_t
 
     // Don't JIT calls with arg splat
     if (vm_ci_flag(ci) & VM_CALL_ARGS_BLOCKARG) {
-        GEN_COUNTER_INC(cb, send_args_blockarg);
-        return YJIT_CANT_COMPILE;
+        if (ctx_get_opnd_type(ctx, OPND_STACK(0)).type == ETYPE_BLOCK_PARAM_PROXY) {
+            // supported
+        } else {
+            GEN_COUNTER_INC(cb, send_args_blockarg);
+            return YJIT_CANT_COMPILE;
+        }
     }
 
     // Don't JIT calls with arg splat
