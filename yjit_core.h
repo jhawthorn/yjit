@@ -39,7 +39,10 @@ enum yjit_type_enum
     ETYPE_ARRAY,
     ETYPE_HASH,
     ETYPE_SYMBOL,
-    ETYPE_STRING
+    ETYPE_STRING,
+    ETYPE_PROC,
+    ETYPE_REGEXP,
+    ETYPE_RANGE,
 };
 
 // Represent the type of a value (local/stack/self) in YJIT
@@ -75,6 +78,11 @@ STATIC_ASSERT(val_type_size, sizeof(val_type_t) == 1);
 #define TYPE_ARRAY ( (val_type_t){ .is_heap = 1, .type = ETYPE_ARRAY } )
 #define TYPE_HASH ( (val_type_t){ .is_heap = 1, .type = ETYPE_HASH } )
 #define TYPE_STRING ( (val_type_t){ .is_heap = 1, .type = ETYPE_STRING } )
+
+#define TYPE_PROC ( (val_type_t){ .is_heap = 1, .type = ETYPE_PROC } )
+#define TYPE_DYNAMIC_SYM ( (val_type_t){ .is_heap = 1, .type = ETYPE_SYMBOL } )
+#define TYPE_REGEXP ( (val_type_t){ .is_heap = 1, .type = ETYPE_REGEXP } )
+#define TYPE_RANGE ( (val_type_t){ .is_heap = 1, .type = ETYPE_RANGE } )
 
 enum yjit_temp_loc
 {

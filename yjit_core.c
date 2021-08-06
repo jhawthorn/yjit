@@ -311,6 +311,14 @@ yjit_type_of_heap_klass(VALUE klass)
         return TYPE_HASH;
     } else if (klass == rb_cString) {
         return TYPE_STRING;
+    } else if (klass == rb_cProc) {
+        return TYPE_PROC;
+    } else if (klass == rb_cSymbol) {
+        return TYPE_DYNAMIC_SYM;
+    } else if (klass == rb_cRegexp) {
+        return TYPE_REGEXP;
+    } else if (klass == rb_cRange) {
+        return TYPE_RANGE;
     } else {
         // generic heap object
         return TYPE_HEAP;
