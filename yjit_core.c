@@ -297,6 +297,25 @@ void ctx_clear_local_types(ctx_t* ctx)
     memset(&ctx->local_types, 0, sizeof(ctx->local_types));
 }
 
+/* This returns an appropriate val_type_t based on a known klass for a value on
+ * the heap */
+val_type_t
+yjit_type_of_heap_klass(VALUE klass)
+{
+    RUBY_ASSERT(RB_TYPE_P(klass, T_CLASS));
+
+    if (false) {
+    } else if (klass == rb_cArray) {
+        return TYPE_ARRAY;
+    } else if (klass == rb_cHash) {
+        return TYPE_HASH;
+    } else if (klass == rb_cString) {
+        return TYPE_STRING;
+    } else {
+        // generic heap object
+        return TYPE_HEAP;
+    }
+}
 
 /* This returns an appropriate val_type_t based on a known value */
 val_type_t
@@ -320,17 +339,7 @@ yjit_type_of_value(VALUE val)
             UNREACHABLE_RETURN(TYPE_IMM);
         }
     } else {
-        switch (BUILTIN_TYPE(val)) {
-            case T_ARRAY:
-               return TYPE_ARRAY;
-            case T_HASH:
-               return TYPE_HASH;
-            case T_STRING:
-               return TYPE_STRING;
-            default:
-                // generic heap object
-                return TYPE_HEAP;
-        }
+        return yjit_type_of_heap_klass(CLASS_OF(val));
     }
 }
 

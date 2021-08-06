@@ -1644,7 +1644,8 @@ gen_checktype(jitstate_t* jit, ctx_t* ctx)
             mov(cb, stack_ret, imm_opnd(Qtrue));
             return YJIT_KEEP_COMPILING;
         } else if (val_type.is_imm || val_type.type != ETYPE_UNKNOWN) {
-            // guaranteed not to match T_STRING/T_ARRAY/T_HASH
+            // Other subclasses could match, but based on the class types we
+            // track this is guaranteed not to match T_STRING/T_ARRAY/T_HASH
             stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
             mov(cb, stack_ret, imm_opnd(Qfalse));
             return YJIT_KEEP_COMPILING;

@@ -271,6 +271,7 @@ void ctx_clear_local_types(ctx_t* ctx);
 int ctx_diff(const ctx_t* src, const ctx_t* dst);
 int type_diff(val_type_t src, val_type_t dst);
 val_type_t yjit_type_of_value(VALUE val);
+val_type_t yjit_type_of_heap_klass(VALUE klass);
 const char *yjit_type_name(val_type_t type);
 
 temp_type_mapping_t ctx_get_opnd_mapping(const ctx_t* ctx, insn_opnd_t opnd);
