@@ -1687,10 +1687,8 @@ gen_checktype(jitstate_t* jit, ctx_t* ctx)
             // Bail if receiver is not a heap object
             test(cb, REG0, imm_opnd(RUBY_IMMEDIATE_MASK));
             jnz_ptr(cb, side_exit);
-            cmp(cb, REG0, imm_opnd(Qfalse));
-            je_ptr(cb, side_exit);
             cmp(cb, REG0, imm_opnd(Qnil));
-            je_ptr(cb, side_exit);
+            jbe_ptr(cb, side_exit);
         }
 
         // Check type on object
