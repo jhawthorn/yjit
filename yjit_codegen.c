@@ -949,11 +949,13 @@ static codegen_status_t
 gen_putobject(jitstate_t* jit, ctx_t* ctx)
 {
     VALUE arg = jit_get_arg(jit, 0);
+    val_type_t val_type = yjit_type_of_value(arg);
 
-    if (FIXNUM_P(arg))
+    // Write argument at SP
+    x86opnd_t stack_top = ctx_stack_push(ctx, val_type);
+
+    if (SPECIAL_CONST_P(arg))
     {
-        // Keep track of the fixnum type tag
-        x86opnd_t stack_top = ctx_stack_push(ctx, TYPE_FIXNUM);
         x86opnd_t imm = imm_opnd((int64_t)arg);
 
         // 64-bit immediates can't be directly written to memory
@@ -967,22 +969,12 @@ gen_putobject(jitstate_t* jit, ctx_t* ctx)
             mov(cb, stack_top, REG0);
         }
     }
-    else if (arg == Qtrue || arg == Qfalse)
-    {
-        x86opnd_t stack_top = ctx_stack_push(ctx, TYPE_IMM);
-        mov(cb, stack_top, imm_opnd((int64_t)arg));
-    }
     else
     {
         // Load the value to push into REG0
         // Note that this value may get moved by the GC
-        VALUE put_val = jit_get_arg(jit, 0);
-        jit_mov_gc_ptr(jit, cb, REG0, put_val);
+        jit_mov_gc_ptr(jit, cb, REG0, arg);
 
-        val_type_t val_type = yjit_type_of_value(put_val);
-
-        // Write argument at SP
-        x86opnd_t stack_top = ctx_stack_push(ctx, val_type);
         mov(cb, stack_top, REG0);
     }
 
