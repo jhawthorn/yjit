@@ -958,27 +958,17 @@ gen_newhash(jitstate_t* jit, ctx_t* ctx)
     }
 }
 
-static codegen_status_t
-gen_putnil(jitstate_t* jit, ctx_t* ctx)
+void
+jit_gen_putval(jitstate_t* jit, ctx_t* ctx, VALUE val)
 {
-    // Write constant at SP
-    x86opnd_t stack_top = ctx_stack_push(ctx, TYPE_NIL);
-    mov(cb, stack_top, imm_opnd(Qnil));
-    return YJIT_KEEP_COMPILING;
-}
-
-static codegen_status_t
-gen_putobject(jitstate_t* jit, ctx_t* ctx)
-{
-    VALUE arg = jit_get_arg(jit, 0);
-    val_type_t val_type = yjit_type_of_value(arg);
+    val_type_t val_type = yjit_type_of_value(val);
 
     // Write argument at SP
     x86opnd_t stack_top = ctx_stack_push(ctx, val_type);
 
-    if (SPECIAL_CONST_P(arg))
+    if (SPECIAL_CONST_P(val))
     {
-        x86opnd_t imm = imm_opnd((int64_t)arg);
+        x86opnd_t imm = imm_opnd((int64_t)val);
 
         // 64-bit immediates can't be directly written to memory
         if (imm.num_bits <= 32)
@@ -995,11 +985,24 @@ gen_putobject(jitstate_t* jit, ctx_t* ctx)
     {
         // Load the value to push into REG0
         // Note that this value may get moved by the GC
-        jit_mov_gc_ptr(jit, cb, REG0, arg);
+        jit_mov_gc_ptr(jit, cb, REG0, val);
 
         mov(cb, stack_top, REG0);
     }
+}
 
+static codegen_status_t
+gen_putnil(jitstate_t* jit, ctx_t* ctx)
+{
+    jit_gen_putval(jit, ctx, Qnil);
+    return YJIT_KEEP_COMPILING;
+}
+
+static codegen_status_t
+gen_putobject(jitstate_t* jit, ctx_t* ctx)
+{
+    VALUE arg = jit_get_arg(jit, 0);
+    jit_gen_putval(jit, ctx, arg);
     return YJIT_KEEP_COMPILING;
 }
 
@@ -1009,9 +1012,7 @@ gen_putobject_int2fix(jitstate_t* jit, ctx_t* ctx)
     int opcode = jit_get_opcode(jit);
     int cst_val = (opcode == BIN(putobject_INT2FIX_0_))? 0:1;
 
-    // Write constant at SP
-    x86opnd_t stack_top = ctx_stack_push(ctx, TYPE_FIXNUM);
-    mov(cb, stack_top, imm_opnd(INT2FIX(cst_val)));
+    jit_gen_putval(jit, ctx, INT2FIX(cst_val));
 
     return YJIT_KEEP_COMPILING;
 }
@@ -3677,6 +3678,77 @@ rb_leaf_builtin_function(const rb_iseq_t *iseq)
     return (const struct rb_builtin_function *)iseq->body->iseq_encoded[1];
 }
 
+static bool
+jit_iseq_trivial_inline_p(const rb_iseq_t *iseq)
+{
+    const struct rb_iseq_constant_body *body = iseq->body;
+    unsigned int pos = 0;
+
+    if (body->catch_except_p)
+        return false;
+
+    if (body->iseq_size >= 10)
+        return false;
+
+    while (pos < body->iseq_size) {
+        int insn = rb_vm_insn_decode(body->iseq_encoded[pos]);
+        bool last_insn = insn == BIN(leave) || rb_vm_insn_decode(body->iseq_encoded[pos + insn_len(insn)]) == BIN(leave);
+
+        switch (insn) {
+            case BIN(putobject_INT2FIX_0_):
+            case BIN(putobject_INT2FIX_1_):
+            case BIN(putnil):
+            case BIN(putobject):
+                // inlinable
+                break;
+            case BIN(leave):
+                RUBY_ASSERT(pos + 1 == body->iseq_size);
+                return true;
+            default:
+                //if (last_insn) {
+                //    fprintf(stderr, "uninlinable due to %s\n", insn_name(insn));
+                //}
+                return false;
+        }
+
+        pos += insn_len(insn);
+    }
+    RUBY_ASSERT(false);
+    return false;
+}
+
+static void
+jit_compile_trivial_inline(jitstate_t *jit, ctx_t *ctx, const rb_iseq_t *iseq)
+{
+    const struct rb_iseq_constant_body *body = iseq->body;
+    unsigned int pos = 0;
+
+    while (pos < body->iseq_size) {
+        int insn = rb_vm_insn_decode(body->iseq_encoded[pos]);
+
+        switch (insn) {
+            case BIN(putobject_INT2FIX_0_):
+                jit_gen_putval(jit, ctx, INT2FIX(0));
+                break;
+            case BIN(putobject_INT2FIX_1_):
+                jit_gen_putval(jit, ctx, INT2FIX(1));
+                break;
+            case BIN(putnil):
+                jit_gen_putval(jit, ctx, Qnil);
+                break;
+            case BIN(putobject):
+                jit_gen_putval(jit, ctx, body->iseq_encoded[pos + 1]);
+                break;
+            case BIN(leave):
+                return;
+            default:
+                rb_bug("undefined inline compilation for %s", insn_name(insn));
+        }
+
+        pos += insn_len(insn);
+    }
+}
+
 static codegen_status_t
 gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, int32_t argc)
 {
@@ -3736,7 +3808,6 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
         return YJIT_CANT_COMPILE;
     }
 
-
     {
         method_codegen_t known_iseq_codegen;
         if ((known_iseq_codegen = lookup_method_codegen(cme->def))) {
@@ -3757,6 +3828,13 @@ gen_send_iseq(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const r
 
     // Create a size-exit to fall back to the interpreter
     uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    if (jit_iseq_trivial_inline_p(iseq)) {
+        ADD_COMMENT(cb, "(inlined method call)");
+        ctx_stack_pop(ctx, argc + 1);
+        jit_compile_trivial_inline(jit, ctx, iseq);
+        return YJIT_KEEP_COMPILING;
+    }
 
     // Check for interrupts
     yjit_check_ints(cb, side_exit);
