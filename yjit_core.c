@@ -161,10 +161,37 @@ ctx_get_opnd_type(const ctx_t* ctx, insn_opnd_t opnd)
     rb_bug("unreachable");
 }
 
+#if RUBY_DEBUG
+
+static void
+assert_types_compatible(val_type_t src, val_type_t dst)
+{
+    // If dst assumes heap but src doesn't
+    if (dst.is_heap && !src.is_heap) {
+        rb_bug("refusing to downgrade type from known-heap to unknown");
+    }
+
+    // If dst assumes imm but src doesn't
+    if (dst.is_imm && !src.is_imm) {
+        rb_bug("refusing to downgrade type from known-immediate to unknown");
+    }
+
+    // If dst assumes known type different from src
+    if (dst.type != ETYPE_UNKNOWN && dst.type != src.type) {
+        rb_bug("can't upgrade type from %s to %s", yjit_type_name(dst), yjit_type_name(src));
+    }
+}
+
 #define UPGRADE_TYPE(dest, src) do { \
-    RUBY_ASSERT(type_diff((src), (dest)) != INT_MAX); \
+    assert_types_compatible((src), (dest)); \
     (dest) = (src); \
 } while (false)
+
+#else
+
+#define UPGRADE_TYPE(dest, src) (dest) = (src)
+
+#endif
 
 
 /**
