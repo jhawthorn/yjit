@@ -3209,13 +3209,15 @@ jit_rb_obj_respond_to(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci,
     VM_ASSERT(mid);
 
     const rb_callable_method_entry_t *target_cme = rb_callable_method_entry(comptime_recv_klass, mid);
-    const rb_callable_method_entry_t *missing_cme = rb_callable_method_entry(comptime_recv_klass, idRespond_to_missing);
+
+    if (!assume_method_basic_definition(jit->block, comptime_recv_klass, idRespond_to_missing)) {
+        return false;
+    }
 
     bool method_exists = !!target_cme;
     bool method_public = target_cme && (METHOD_ENTRY_VISI(target_cme) == METHOD_VISI_PUBLIC);
-    bool default_method_missing = !lookup_method_codegen(missing_cme->def);
 
-    if (!method_exists && !default_method_missing) {
+    if (!method_exists) {
         // Custom method missing definition.
         return false;
     }
