@@ -2766,14 +2766,15 @@ jit_rb_obj_is_kind_of(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci,
     ADD_COMMENT(cb, "push result");
     ctx_stack_pop(ctx, 2);
     if (RTEST(ret)) {
-        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
-        mov(cb, stack_ret, imm_opnd(ret));
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+        mov(cb, stack_ret, imm_opnd(Qtrue));
     } else {
-        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_IMM);
-        mov(cb, stack_ret, imm_opnd(ret));
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+        mov(cb, stack_ret, imm_opnd(Qfalse));
     }
     return true;
 }
+
 
 // Check if we know how to codegen for a particular cfunc method
 static method_codegen_t
@@ -2784,6 +2785,79 @@ lookup_method_codegen(const rb_method_definition_t *def)
         return gen_fn;
     }
     return NULL;
+}
+bool
+jit_rb_obj_respond_to_missing(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "rb_obj_respond_to_missing");
+    ctx_stack_pop(ctx, argc + 1);
+    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+    mov(cb, stack_ret, imm_opnd(Qfalse));
+    return true;
+}
+
+bool
+jit_rb_obj_respond_to(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const rb_callable_method_entry_t *cme, rb_iseq_t *block, const int32_t argc)
+{
+    ADD_COMMENT(cb, "respond_to?");
+
+    VALUE comptime_recv = jit_peek_at_stack(jit, ctx, argc);
+    VALUE comptime_recv_klass = CLASS_OF(comptime_recv);
+    VALUE comptime_sym = jit_peek_at_stack(jit, ctx, argc-1);
+    x86opnd_t sym = ctx_stack_opnd(ctx, argc-1);
+    x86opnd_t include_all = ctx_stack_opnd(ctx, 0); // if available
+
+    if (!STATIC_SYM_P(comptime_sym)) {
+        return false;
+    }
+    ID mid = rb_check_id(&comptime_sym);
+    VM_ASSERT(mid);
+
+    const rb_callable_method_entry_t *target_cme = rb_callable_method_entry(comptime_recv_klass, mid);
+    const rb_callable_method_entry_t *missing_cme = rb_callable_method_entry(comptime_recv_klass, idRespond_to_missing);
+
+    bool method_exists = !!target_cme;
+    bool method_public = target_cme && (METHOD_ENTRY_VISI(target_cme) == METHOD_VISI_PUBLIC);
+    bool default_method_missing = !lookup_method_codegen(missing_cme->def);
+
+    if (!method_exists && !default_method_missing) {
+        // Custom method missing definition.
+        return false;
+    }
+
+    uint8_t *side_exit = yjit_side_exit(jit, ctx);
+
+    ADD_COMMENT(cb, "guard known mid");
+    // note: only static symbols are supported so GC ptr not necessary
+    cmp(cb, sym, imm_opnd(comptime_sym));
+    jne_ptr(cb, side_exit);
+
+    bool result;
+    if (!method_exists) {
+        result = false;
+    } else if (method_public) {
+        result = true;
+    } else if (argc == 2) {
+        ADD_COMMENT(cb, "guard include_all == true");
+        cmp(cb, include_all, imm_opnd(Qtrue));
+        jne_ptr(cb, side_exit);
+
+        result = true;
+    } else {
+        result = false;
+    }
+
+    ctx_stack_pop(ctx, argc + 1);
+    if (result) {
+        ADD_COMMENT(cb, "push true");
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_TRUE);
+        mov(cb, stack_ret, imm_opnd(Qtrue));
+    } else {
+        ADD_COMMENT(cb, "push false");
+        x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_FALSE);
+        mov(cb, stack_ret, imm_opnd(Qfalse));
+    }
+    return true;
 }
 
 static codegen_status_t
@@ -3851,6 +3925,9 @@ yjit_init_optimized_methods()
 
     yjit_reg_method(rb_mKernel, "is_a?", jit_rb_obj_is_kind_of);
     yjit_reg_method(rb_mKernel, "kind_of?", jit_rb_obj_is_kind_of);
+
+    yjit_reg_method(rb_mKernel, "respond_to_missing?", jit_rb_obj_respond_to_missing);
+    yjit_reg_method(rb_mKernel, "respond_to?", jit_rb_obj_respond_to);
 }
 
 void
