@@ -3238,15 +3238,15 @@ jit_rb_int_equal(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
 
     uint8_t *side_exit = yjit_side_exit(jit, ctx);
 
+    mov(cb, REG0, arg1);
     if (arg1_type.type != ETYPE_FIXNUM) {
         // test argument is fixnum
-        mov(cb, REG0, arg1);
         test(cb, REG0, imm_opnd(1));
-        jne_ptr(cb, side_exit);
+        jz_ptr(cb, side_exit);
         ctx_upgrade_opnd_type(ctx, OPND_STACK(0), TYPE_FIXNUM);
     }
 
-    cmp(cb, arg1, REG0);
+    cmp(cb, arg0, REG0);
     mov(cb, REG0, imm_opnd(Qtrue));
     mov(cb, REG1, imm_opnd(Qfalse));
     cmovne(cb, REG0, REG1);
