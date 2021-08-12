@@ -131,6 +131,23 @@ assume_bop_not_redefined(block_t *block, int redefined_flag, enum ruby_basic_ope
     }
 }
 
+// Checks that a method still matches its basic version (as defined before the
+// VM started). Same as calling rb_method_basic_definition_p
+// Uses assume_method_lookup_stable to ensure our block is invalidated if that
+// changes.
+bool
+assume_method_basic_definition(block_t *block, VALUE klass, ID mid)
+{
+    const rb_callable_method_entry_t *cme;
+    cme = rb_callable_method_entry(klass, mid);
+    if (cme && METHOD_ENTRY_BASIC(cme)) {
+        assume_method_lookup_stable(klass, cme, block);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 // Map klass => id_table[mid, set of blocks]
 // While a block `b` is in the table, b->callee_cme == rb_callable_method_entry(klass, mid).
 // See assume_method_lookup_stable()

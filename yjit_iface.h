@@ -108,6 +108,7 @@ int yjit_opcode_at_pc(const rb_iseq_t *iseq, const VALUE *pc);
 void check_cfunc_dispatch(VALUE receiver, struct rb_callinfo *ci, void *callee, rb_callable_method_entry_t *compile_time_cme);
 
 RBIMPL_ATTR_NODISCARD() bool assume_bop_not_redefined(block_t *block, int redefined_flag, enum ruby_basic_operators bop);
+RBIMPL_ATTR_NODISCARD() bool assume_method_basic_definition(block_t *block, VALUE klass, ID mid);
 void assume_method_lookup_stable(VALUE receiver_klass, const rb_callable_method_entry_t *cme, block_t *block);
 RBIMPL_ATTR_NODISCARD() bool assume_single_ractor_mode(block_t *block);
 void assume_stable_global_constant_state(block_t *block);

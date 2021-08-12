@@ -6,6 +6,7 @@
 #include "builtin.h"
 #include "internal/compile.h"
 #include "internal/class.h"
+#include "internal/hash.h"
 #include "internal/object.h"
 #include "internal/string.h"
 #include "internal/variable.h"
@@ -1925,6 +1926,24 @@ gen_opt_neq(jitstate_t* jit, ctx_t* ctx)
     return gen_send_general(jit, ctx, cd, NULL);
 }
 
+VALUE
+yjit_rb_hash_aref_basic_default(VALUE hash, VALUE key)
+{
+    st_data_t val;
+
+    if (rb_hash_stlike_lookup(hash, key, &val)) {
+        return (VALUE)val;
+    }
+    else {
+        VALUE ifnone = RHASH_IFNONE(hash);
+        if (!FL_TEST(hash, RHASH_PROC_DEFAULT)) return ifnone;
+        RUBY_ASSERT_ALWAYS(key != Qundef);
+        VALUE args[2] = {hash, key};
+        return rb_proc_call_with_block(ifnone, 2, args, Qnil);
+    }
+    return Qnil;
+}
+
 static codegen_status_t
 gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
 {
@@ -2000,6 +2019,10 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             return YJIT_CANT_COMPILE;
         }
 
+        if (!assume_method_basic_definition(jit->block, rb_cHash, rb_intern("default"))) {
+            return YJIT_CANT_COMPILE;
+        }
+
         val_type_t recv_type = ctx_get_opnd_type(ctx, OPND_STACK(1));
         x86opnd_t idx_opnd = ctx_stack_opnd(ctx, 0);
         x86opnd_t recv_opnd = ctx_stack_opnd(ctx, 1);
@@ -2022,7 +2045,7 @@ gen_opt_aref(jitstate_t *jit, ctx_t *ctx)
             ctx_stack_pop(ctx, 2);
             jit_save_sp(jit, ctx);
 
-            call_ptr(cb, REG0, (void *)rb_hash_aref);
+            call_ptr(cb, REG0, (void *)yjit_rb_hash_aref_basic_default);
 
             // Push the return value onto the stack
             x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
