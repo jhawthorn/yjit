@@ -2119,31 +2119,8 @@ VALUE rb_vm_opt_mod(VALUE recv, VALUE obj);
 static codegen_status_t
 gen_opt_mod(jitstate_t* jit, ctx_t* ctx)
 {
-    // Save the PC and SP because the callee may allocate bignums
-    // Note that this modifies REG_SP, which is why we do it first
-    jit_save_pc(jit, REG0);
-    jit_save_sp(jit, ctx);
-
-    uint8_t* side_exit = yjit_side_exit(jit, ctx);
-
-    // Get the operands from the stack
-    x86opnd_t arg1 = ctx_stack_pop(ctx, 1);
-    x86opnd_t arg0 = ctx_stack_pop(ctx, 1);
-
-    // Call rb_vm_opt_mod(VALUE recv, VALUE obj)
-    mov(cb, C_ARG_REGS[0], arg0);
-    mov(cb, C_ARG_REGS[1], arg1);
-    call_ptr(cb, REG0, (void *)rb_vm_opt_mod);
-
-    // If val == Qundef, bail to do a method call
-    cmp(cb, RAX, imm_opnd(Qundef));
-    je_ptr(cb, side_exit);
-
-    // Push the return value onto the stack
-    x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
-    mov(cb, stack_ret, RAX);
-
-    return YJIT_KEEP_COMPILING;
+    // Delegate to send, call the method on the recv
+    return gen_opt_send_without_block(jit, ctx);
 }
 
 static codegen_status_t
