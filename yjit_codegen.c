@@ -822,12 +822,10 @@ gen_newrange(jitstate_t* jit, ctx_t* ctx)
     mov(cb, REG0, ctx_stack_opnd(ctx, 1));
     mov(cb, REG1, ctx_stack_opnd(ctx, 0));
 
-    yjit_save_regs(cb);
     mov(cb, C_ARG_REGS[0], REG0);
     mov(cb, C_ARG_REGS[1], REG1);
     mov(cb, C_ARG_REGS[2], imm_opnd(flag));
     call_ptr(cb, REG0, (void *)rb_range_new);
-    yjit_load_regs(cb);
 
     ctx_stack_pop(ctx, 2);
     x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_HEAP);
@@ -3053,13 +3051,8 @@ jit_rb_sym_to_s(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, const
 
     x86opnd_t self = ctx_stack_pop(ctx, 1);
 
-    // Save YJIT registers
-    yjit_save_regs(cb);
-
     mov(cb, C_ARG_REGS[0], self);
     call_ptr(cb, REG0, (void *)rb_sym_to_s);
-
-    yjit_load_regs(cb);
 
     // push result
     x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_STRING);
@@ -3268,13 +3261,9 @@ jit_rb_ary_first(jitstate_t *jit, ctx_t *ctx, const struct rb_callinfo *ci, cons
 
     x86opnd_t array = ctx_stack_pop(ctx, 1);
 
-    yjit_save_regs(cb);
-
     mov(cb, C_ARG_REGS[0], array);
     mov(cb, C_ARG_REGS[1], imm_opnd(0));
     call_ptr(cb, REG0, (void *)rb_ary_entry_internal);
-
-    yjit_load_regs(cb);
 
     // Push the return value onto the stack
     x86opnd_t stack_ret = ctx_stack_push(ctx, TYPE_UNKNOWN);
@@ -4604,9 +4593,6 @@ gen_invokebuiltin(jitstate_t *jit, ctx_t *ctx)
     jit_save_pc(jit, REG0);
     jit_save_sp(jit, ctx);
 
-    // Save YJIT registers
-    yjit_save_regs(cb);
-
     // Save SP in REG0
     mov(cb, REG0, REG_SP);
 
@@ -4625,9 +4611,6 @@ gen_invokebuiltin(jitstate_t *jit, ctx_t *ctx)
     }
 
     call_ptr(cb, REG0, (void *)bf->func_ptr);
-
-    // Load YJIT registers
-    yjit_load_regs(cb);
 
     // Push the return value
     ctx_stack_pop(ctx, bf->argc);
