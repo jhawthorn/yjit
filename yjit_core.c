@@ -493,8 +493,8 @@ yjit_get_version_array(const rb_iseq_t *iseq, unsigned idx)
         return NULL;
     }
 
-    RUBY_ASSERT((unsigned)rb_darray_size(body->yjit_blocks) == body->iseq_size);
-    return rb_darray_get(body->yjit_blocks, idx);
+    RUBY_ASSERT((unsigned)rb_darray_size(body->yjit_blocks) == body->iseq_size + 1);
+    return rb_darray_get(body->yjit_blocks, idx + 1);
 }
 
 // Count the number of block versions matching a given blockid
@@ -517,10 +517,10 @@ add_block_version(blockid_t blockid, block_t* block)
     if (rb_darray_size(body->yjit_blocks) == 0) {
         // Initialize yjit_blocks to be as wide as body->iseq_encoded
         int32_t casted = (int32_t)body->iseq_size;
-        if ((unsigned)casted != body->iseq_size) {
+        if ((unsigned)(casted + 1) != (body->iseq_size + 1)) {
             rb_bug("iseq too large");
         }
-        if (!rb_darray_make(&body->yjit_blocks, casted)) {
+        if (!rb_darray_make(&body->yjit_blocks, casted + 1)) {
             rb_bug("allocation failed");
         }
 
@@ -530,8 +530,15 @@ add_block_version(blockid_t blockid, block_t* block)
 #endif
     }
 
-    RUBY_ASSERT((int32_t)blockid.idx < rb_darray_size(body->yjit_blocks));
-    rb_yjit_block_array_t *block_array_ref = rb_darray_ref(body->yjit_blocks, blockid.idx);
+    rb_yjit_block_array_t *block_array_ref;
+
+    if (blockid.idx == (uint32_t)-1) {
+	    // prologue block
+	    block_array_ref = rb_darray_ref(body->yjit_blocks, 0);
+    } else {
+	    RUBY_ASSERT((int32_t)blockid.idx < rb_darray_size(body->yjit_blocks));
+	    block_array_ref = rb_darray_ref(body->yjit_blocks, blockid.idx + 1);
+    }
 
     // Add the new block
     if (!rb_darray_append(block_array_ref, block)) {
@@ -706,6 +713,8 @@ block_t* gen_block_version(blockid_t blockid, const ctx_t* start_ctx, rb_executi
 // Generate a block version that is an entry point inserted into an iseq
 uint8_t* gen_entry_point(const rb_iseq_t *iseq, uint32_t insn_idx, rb_execution_context_t *ec)
 {
+    RUBY_ASSERT(insn_idx == 0);
+
     // If we aren't at PC 0, don't generate code
     // See yjit_pc_guard
     if (iseq->body->iseq_encoded != ec->cfp->pc) {
@@ -713,13 +722,25 @@ uint8_t* gen_entry_point(const rb_iseq_t *iseq, uint32_t insn_idx, rb_execution_
     }
 
     // The entry context makes no assumptions about types
-    blockid_t blockid = { iseq, insn_idx };
+    blockid_t prologue_blockid = { iseq, -1 };
+
+    // Allocate a new block version object
+    block_t *prologue_block = calloc(1, sizeof(block_t));
+    prologue_block->blockid = (prologue_blockid);
+    prologue_block->ctx = DEFAULT_CTX;
+    prologue_block->start_pos = cb->write_pos;
 
     // Write the interpreter entry prologue
     uint8_t* code_ptr = yjit_entry_prologue(iseq);
 
+    prologue_block->end_pos = cb->write_pos;
+    add_block_version(prologue_blockid, prologue_block);
+
+    // The entry context makes no assumptions about types
+    blockid_t blockid0 = { iseq, insn_idx };
+
     // Try to generate code for the entry block
-    block_t* block = gen_block_version(blockid, &DEFAULT_CTX, ec);
+    block_t* block = gen_block_version(blockid0, &DEFAULT_CTX, ec);
 
     // If we couldn't generate any code
     if (block->end_idx == insn_idx)
