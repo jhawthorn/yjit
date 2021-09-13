@@ -300,7 +300,7 @@ void gen_branch(
     branchgen_fn gen_fn
 );
 
-void gen_direct_jump(
+branch_t *gen_direct_jump(
     block_t* block,
     const ctx_t* ctx,
     blockid_t target0

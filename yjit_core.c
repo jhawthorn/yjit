@@ -721,8 +721,8 @@ uint8_t* gen_entry_point(const rb_iseq_t *iseq, uint32_t insn_idx, rb_execution_
         return NULL;
     }
 
-    // The entry context makes no assumptions about types
     blockid_t prologue_blockid = { iseq, -1 };
+    blockid_t blockid0 = { iseq, 0 };
 
     // Allocate a new block version object
     block_t *prologue_block = calloc(1, sizeof(block_t));
@@ -733,19 +733,21 @@ uint8_t* gen_entry_point(const rb_iseq_t *iseq, uint32_t insn_idx, rb_execution_
     // Write the interpreter entry prologue
     uint8_t* code_ptr = yjit_entry_prologue(iseq);
 
+    branch_t *branch;
+    branch = gen_direct_jump(prologue_block, &DEFAULT_CTX, blockid0);
+
     prologue_block->end_pos = cb->write_pos;
     add_block_version(prologue_blockid, prologue_block);
 
-    // The entry context makes no assumptions about types
-    blockid_t blockid0 = { iseq, insn_idx };
+    if (!branch->dst_addrs[0]) {
+        // Try to generate code for the entry block
+        block_t* block = gen_block_version(blockid0, &DEFAULT_CTX, ec);
 
-    // Try to generate code for the entry block
-    block_t* block = gen_block_version(blockid0, &DEFAULT_CTX, ec);
-
-    // If we couldn't generate any code
-    if (block->end_idx == insn_idx)
-    {
-        return NULL;
+        // If we couldn't generate any code
+        if (block->end_idx == 0)
+        {
+            return NULL;
+        }
     }
 
     return code_ptr;
@@ -934,7 +936,8 @@ gen_jump_branch(codeblock_t* cb, uint8_t* target0, uint8_t* target1, uint8_t sha
     }
 }
 
-void gen_direct_jump(
+branch_t *
+gen_direct_jump(
     block_t* block,
     const ctx_t* ctx,
     blockid_t target0
